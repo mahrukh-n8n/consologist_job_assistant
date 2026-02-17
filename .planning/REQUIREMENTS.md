@@ -40,6 +40,7 @@
 - [ ] **SETT-01**: User can configure n8n webhook URL in extension popup/options
 - [ ] **SETT-02**: User can configure scraping schedule interval
 - [ ] **SETT-03**: User can configure output format preference (webhook/CSV/both)
+- [ ] **SETT-04**: User can enable/disable Windows notifications and select which notification types to show (scrape complete, webhook sent, proposal loaded, errors) via checkboxes
 
 ## v2 Requirements
 
@@ -68,30 +69,31 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SCRP-01 | — | Pending |
-| SCRP-02 | — | Pending |
-| SCRP-03 | — | Pending |
-| SCRP-04 | — | Pending |
-| WEHK-01 | — | Pending |
-| WEHK-02 | — | Pending |
-| WEHK-03 | — | Pending |
-| WEHK-04 | — | Pending |
-| INJC-01 | — | Pending |
-| INJC-02 | — | Pending |
-| INJC-03 | — | Pending |
-| EXPT-01 | — | Pending |
-| EXPT-02 | — | Pending |
-| NOTF-01 | — | Pending |
-| NOTF-02 | — | Pending |
-| SETT-01 | — | Pending |
-| SETT-02 | — | Pending |
-| SETT-03 | — | Pending |
+| SETT-01 | Phase 1 | Pending |
+| SETT-02 | Phase 1 | Pending |
+| SETT-03 | Phase 1 | Pending |
+| SETT-04 | Phase 1 | Pending |
+| SCRP-01 | Phase 2 | Pending |
+| SCRP-02 | Phase 2 | Pending |
+| SCRP-03 | Phase 2 | Pending |
+| SCRP-04 | Phase 2 | Pending |
+| WEHK-01 | Phase 3 | Pending |
+| WEHK-02 | Phase 3 | Pending |
+| INJC-01 | Phase 3 | Pending |
+| INJC-02 | Phase 3 | Pending |
+| EXPT-01 | Phase 3 | Pending |
+| EXPT-02 | Phase 3 | Pending |
+| WEHK-03 | Phase 4 | Pending |
+| WEHK-04 | Phase 4 | Pending |
+| INJC-03 | Phase 4 | Pending |
+| NOTF-01 | Phase 4 | Pending |
+| NOTF-02 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 ⚠️
+- v1 requirements: 19 total
+- Mapped to phases: 19
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-17*
-*Last updated: 2026-02-17 after initial definition*
+*Last updated: 2026-02-17 after roadmap creation*
