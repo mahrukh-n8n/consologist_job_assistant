@@ -44,6 +44,7 @@ Instantly see which Upwork jobs match your criteria and have proposal-ready work
 
 ## Constraints
 
+- **Data compatibility:** CSV and webhook output field names MUST match reference project exactly (case-sensitive) — ensures n8n workflows work without modification
 - **Platform:** Chrome Extension, Manifest V3, JavaScript (no TypeScript)
 - **Browser API:** Must use service workers (MV3), not background pages (MV2)
 - **Storage:** chrome.storage.local for settings, no SQLite
