@@ -5,32 +5,32 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Instantly see which Upwork jobs match your criteria and have proposal-ready workflows — without leaving the Upwork page.
-**Current focus:** Phase 1 — Foundation
+**Current focus:** Phase 2 — Scraping Engine
 
 ## Current Position
 
-Phase: 1 of 4 (Foundation)
-Plan: 1 of 2 in current phase
+Phase: 2 of 4 (Scraping Engine)
+Plan: 1 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-18 — Completed 01-01 extension scaffold
+Last activity: 2026-02-18 — Completed 01-02 settings popup UI, Phase 1 complete
 
-Progress: [█░░░░░░░░░] 10%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 2min
-- Total execution time: 0.03 hours
+- Total plans completed: 2
+- Average duration: 6min
+- Total execution time: 0.2 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-foundation | 1/2 | 2min | 2min |
+| 01-foundation | 2/2 | ~12min | ~6min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2min)
+- Last 5 plans: 01-01 (2min), 01-02 (10min)
 - Trend: —
 
 *Updated after each plan completion*
@@ -49,6 +49,9 @@ Recent decisions affecting current work:
 - alarms permission added proactively in manifest.json to avoid mid-project manifest update when Phase 2 ships
 - type:module on service_worker to enable ES module imports from src/utils/ in later phases
 - SVG icons used as placeholders to avoid PNG tooling dependency (Chrome accepts SVG in action.default_icon)
+- Flat dot-notation storage keys for notifications (e.g., 'notifications.master') — future phases can read individual keys without loading full sub-object
+- chrome.storage.local.get(null) on popup open for single-call load merged over DEFAULTS via ?? operator
+- Master notification toggle uses CSS .disabled class (not disabled attribute) so sub-values are still saved when master is off
 
 ### Pending Todos
 
@@ -58,10 +61,9 @@ None yet.
 
 - Webhook dependency: n8n must be running for match icons and proposal loading to work during manual testing
 - Field name compatibility: all scraped data keys must be verified against reference project before Phase 3 ships
-- popup.css referenced in popup.html does not yet exist — Plan 01-02 must create it or remove the reference
 
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 01-01-PLAN.md — extension scaffold complete, ready for 01-02 popup settings UI
+Stopped at: Completed 01-02-PLAN.md — settings popup UI complete, Phase 1 complete, ready for Phase 2 scraping engine
 Resume file: None
