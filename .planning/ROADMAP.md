@@ -12,7 +12,7 @@ Build a Chrome extension (Manifest V3, JavaScript) that scrapes Upwork job data,
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation** - Installable extension with settings UI and all required permissions wired up
+- [x] **Phase 1: Foundation** - Installable extension with settings UI and all required permissions wired up
 - [ ] **Phase 2: Scraping Engine** - DOM scraping works on search and detail pages, on-demand and on schedule
 - [ ] **Phase 3: Webhook Integration and Search Overlay** - Job data flows to n8n, match icons appear, CSV export works
 - [ ] **Phase 4: Proposal Workflow and Notifications** - Proposals load on detail pages, paste and clipboard work, notifications fire
@@ -92,7 +92,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 1/2 | In progress | - |
+| 1. Foundation | 2/2 | Complete | 2026-02-18 |
 | 2. Scraping Engine | 0/3 | Not started | - |
 | 3. Webhook Integration and Search Overlay | 0/3 | Not started | - |
 | 4. Proposal Workflow and Notifications | 0/2 | Not started | - |
