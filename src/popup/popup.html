@@ -3,14 +3,93 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Consologit_Job_Assistant</title>
+  <title>Upwork Job Scraper</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div id="app">
-    <h1>Consologit_Job_Assistant</h1>
-    <p>Settings UI — Phase 1 shell</p>
+    <header>
+      <h1>Upwork Job Scraper</h1>
+    </header>
+
+    <main>
+      <!-- SETT-01: Webhook URL -->
+      <section class="setting-group">
+        <label for="webhook-url">Webhook URL</label>
+        <input
+          type="url"
+          id="webhook-url"
+          name="webhookUrl"
+          placeholder="https://your-n8n-instance.com/webhook/..."
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <p class="hint">n8n webhook endpoint that receives job data.</p>
+      </section>
+
+      <!-- SETT-02: Schedule interval -->
+      <section class="setting-group">
+        <label for="schedule-interval">Check Interval</label>
+        <select id="schedule-interval" name="scheduleInterval">
+          <option value="15">Every 15 minutes</option>
+          <option value="30" selected>Every 30 minutes</option>
+          <option value="60">Every 60 minutes</option>
+          <option value="120">Every 2 hours</option>
+        </select>
+      </section>
+
+      <!-- SETT-03: Output format -->
+      <section class="setting-group">
+        <span class="label">Output Format</span>
+        <div class="radio-group">
+          <label class="radio-label">
+            <input type="radio" name="outputFormat" value="webhook"> Webhook only
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="outputFormat" value="csv"> CSV only
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="outputFormat" value="both" checked> Both
+          </label>
+        </div>
+      </section>
+
+      <!-- SETT-04: Notification toggles -->
+      <section class="setting-group">
+        <span class="label">Notifications</span>
+        <div class="toggle-row master-toggle-row">
+          <label class="toggle-label" for="notif-master">
+            <input type="checkbox" id="notif-master" name="notifMaster" checked>
+            Enable notifications
+          </label>
+        </div>
+        <div id="notif-subtypes" class="notif-subtypes">
+          <label class="toggle-label sub">
+            <input type="checkbox" id="notif-scrape-complete" name="notifScrapeComplete" checked>
+            Scrape complete
+          </label>
+          <label class="toggle-label sub">
+            <input type="checkbox" id="notif-webhook-sent" name="notifWebhookSent" checked>
+            Webhook sent
+          </label>
+          <label class="toggle-label sub">
+            <input type="checkbox" id="notif-proposal-loaded" name="notifProposalLoaded" checked>
+            Proposal loaded
+          </label>
+          <label class="toggle-label sub">
+            <input type="checkbox" id="notif-errors" name="notifErrors" checked>
+            Errors
+          </label>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div id="save-status" class="save-status" aria-live="polite"></div>
+      <button id="save-btn" type="button">Save Settings</button>
+    </footer>
   </div>
+
   <script src="popup.js"></script>
 </body>
 </html>
