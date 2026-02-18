@@ -1,0 +1,13 @@
+Ref of previous project = C:\Users\Glorvax\Documents\upwork job scrapper
+
+What is chrome extension is supposed to do
+
+can read the upwork website data
+can scrape for the job on demand and scheduled - extract the same data as we doing in previous project
+- push the results to webhook or save as csv automatically 
+- on upwork search result page can show green icon on job ( for jobs that match in remote database - all jobid sent to webhook on search page load) , red for which dont match , plus blue icon on jobs on which we have applied - all by injecting in the page
+- on job details page
+	- has button to scrape all the data from the current upwork job page and push to webhook or save as csv
+	- has option to load the proposal from webhook and paste in the desciprtion section of job apply page ( if able to file ) and also copy to clip board - 
+
+- show summary of all actions that it is performing short popup in windows notification with details
