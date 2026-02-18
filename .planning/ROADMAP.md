@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: TBD
 
 Plans:
-- [ ] 01-01: Manifest V3 scaffold — manifest.json, service worker registration, content script declarations, permission set
+- [x] 01-01: Manifest V3 scaffold — manifest.json, service worker registration, content script declarations, permission set
 - [ ] 01-02: Settings UI — popup HTML/JS with webhook URL input, schedule interval selector, output format toggle backed by chrome.storage.local
 
 ### Phase 2: Scraping Engine
@@ -92,7 +92,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/2 | Not started | - |
+| 1. Foundation | 1/2 | In progress | - |
 | 2. Scraping Engine | 0/3 | Not started | - |
 | 3. Webhook Integration and Search Overlay | 0/3 | Not started | - |
 | 4. Proposal Workflow and Notifications | 0/2 | Not started | - |
