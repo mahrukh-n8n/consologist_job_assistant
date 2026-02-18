@@ -545,3 +545,12 @@ _spaObserver.observe(document.body, { childList: true, subtree: true });
 
 // Run on initial script load
 routePage();
+
+// ── Phase 4: Proposal workflow ────────────────────────────────────────────
+
+// ProposalManager is defined in src/utils/proposal.js, which is listed BEFORE
+// this file in manifest.json content_scripts[].js — so it is always available.
+// The guard prevents a hard crash if the load order is wrong during development.
+if (typeof ProposalManager !== 'undefined') {
+  ProposalManager.init();
+}

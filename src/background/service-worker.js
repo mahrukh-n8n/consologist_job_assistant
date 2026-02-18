@@ -173,6 +173,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep port open for async response
   }
 
+  // Fetch AI-generated proposal from n8n for a job apply page
+  // Message format: { action: 'LOAD_PROPOSAL', jobData: { job_id, title, description } }
+  // Response: { proposal: string } | { error: string }
+  if (message.action === 'LOAD_PROPOSAL') {
+    handleLoadProposal(message.jobData, sendResponse);
+    return true; // keep channel open for async response
+  }
+
   return false; // synchronous response for unhandled messages
 });
 
@@ -255,6 +263,59 @@ async function runScheduledScrape() {
       lastScrapedJobs: jobs,
       lastScrapeTime: new Date().toISOString(),
     });
+  }
+}
+
+// ─── Proposal load handler ────────────────────────────────────────────────────
+
+/**
+ * Fetches an AI-generated proposal from the configured n8n proposal webhook URL.
+ *
+ * Requires 'proposalWebhookUrl' in chrome.storage.local.
+ * This is distinct from 'webhookUrl' (job data webhook).
+ * Set via the extension popup settings panel.
+ *
+ * Handles both JSON responses ({ proposal: "..." } or { text: "..." }) and
+ * plain-text responses — n8n workflow can return either format.
+ *
+ * @param {{ job_id: string, title: string, description: string }} jobData
+ * @param {function} sendResponse
+ */
+async function handleLoadProposal(jobData, sendResponse) {
+  try {
+    const settings = await chrome.storage.local.get(['proposalWebhookUrl']);
+    const url = settings.proposalWebhookUrl;
+
+    if (!url) {
+      sendResponse({ error: 'No proposal webhook URL configured. Set it in extension settings.' });
+      return;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(jobData),
+    });
+
+    if (!response.ok) {
+      sendResponse({ error: `n8n returned ${response.status}: ${response.statusText}` });
+      return;
+    }
+
+    // n8n may return plain text or JSON { proposal: "..." }
+    const contentType = response.headers.get('content-type') || '';
+    let proposalText;
+    if (contentType.includes('application/json')) {
+      const json = await response.json();
+      proposalText = json.proposal || json.text || JSON.stringify(json);
+    } else {
+      proposalText = await response.text();
+    }
+
+    sendResponse({ proposal: proposalText.trim() });
+
+  } catch (err) {
+    sendResponse({ error: `Proposal load failed: ${err.message}` });
   }
 }
 

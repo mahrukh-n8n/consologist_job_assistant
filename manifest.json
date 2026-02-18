@@ -25,7 +25,10 @@
   "content_scripts": [
     {
       "matches": ["*://*.upwork.com/*"],
-      "js": ["src/content/upwork-content.js"],
+      "js": [
+        "src/utils/proposal.js",
+        "src/content/upwork-content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
