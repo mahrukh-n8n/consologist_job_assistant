@@ -336,3 +336,150 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   return false;
 });
+
+// ── Search page: collect job IDs and inject colored match status icons ──────
+
+/**
+ * Collects job IDs from all visible job cards, sends GET_MATCH_STATUS to the
+ * service worker, and injects a colored circle icon next to each matching
+ * job title link based on the returned status map.
+ *
+ * Status colors:
+ *   match    → #22c55e (green)
+ *   no_match → #ef4444 (red)
+ *   applied  → #3b82f6 (blue)
+ */
+function initSearchPage() {
+  // Reuse the existing scrapeSearchPage() card/link discovery logic to find
+  // cards and their anchors, then map job_id → anchor element.
+  const cardSelectors = [
+    '[data-test="job-tile"]',
+    'section.air3-card-section',
+    'article.job-tile',
+    '.job-tile',
+  ];
+  const linkSelectors = [
+    '[data-test="job-title"] a',
+    'h2.job-title a',
+    'h2 a[href*="/jobs/"]',
+    'a[href*="/jobs/"]',
+  ];
+
+  let cards = [];
+  for (const sel of cardSelectors) {
+    const found = document.querySelectorAll(sel);
+    if (found.length > 0) {
+      cards = Array.from(found);
+      break;
+    }
+  }
+
+  if (cards.length === 0) {
+    console.log('[upwork-ext] initSearchPage: no job cards found');
+    return;
+  }
+
+  // Build a map of job_id -> title anchor element
+  const jobIdToAnchor = new Map();
+  for (const card of cards) {
+    let anchor = null;
+    for (const sel of linkSelectors) {
+      anchor = card.querySelector(sel);
+      if (anchor) break;
+    }
+    if (!anchor) continue;
+
+    const href = anchor.getAttribute('href') || '';
+    const absoluteUrl = href.startsWith('http')
+      ? href
+      : `https://www.upwork.com${href}`;
+
+    const job_id = extractJobId(absoluteUrl);
+    if (!job_id) continue;
+
+    jobIdToAnchor.set(job_id, anchor);
+  }
+
+  const jobIds = Array.from(jobIdToAnchor.keys());
+  if (jobIds.length === 0) {
+    console.log('[upwork-ext] initSearchPage: no job IDs found on search page');
+    return;
+  }
+
+  console.debug('[upwork-ext] initSearchPage: requesting match status for', jobIds.length, 'jobs');
+
+  chrome.runtime.sendMessage({ action: 'GET_MATCH_STATUS', jobIds }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.warn('[upwork-ext] GET_MATCH_STATUS error:', chrome.runtime.lastError.message);
+      return;
+    }
+    if (!response || !response.success) {
+      console.warn('[upwork-ext] GET_MATCH_STATUS unsuccessful:', response?.error);
+      return;
+    }
+
+    const statusColors = {
+      match: '#22c55e',
+      no_match: '#ef4444',
+      applied: '#3b82f6',
+    };
+
+    for (const [jobId, status] of Object.entries(response.statuses)) {
+      const anchor = jobIdToAnchor.get(jobId);
+      if (!anchor) continue;
+
+      // Skip if icon already injected (handles SPA re-runs)
+      if (anchor.nextElementSibling && anchor.nextElementSibling.classList.contains('upwork-ext-status-icon')) continue;
+
+      const color = statusColors[status];
+      if (!color) continue; // unknown status — no icon
+
+      const icon = document.createElement('span');
+      icon.className = 'upwork-ext-status-icon';
+      icon.style.cssText = 'border-radius:50%;width:10px;height:10px;display:inline-block;margin-left:6px;vertical-align:middle;';
+      icon.style.backgroundColor = color;
+      icon.title = status; // tooltip for accessibility
+
+      anchor.insertAdjacentElement('afterend', icon);
+    }
+
+    console.debug('[upwork-ext] initSearchPage: icons injected for', Object.keys(response.statuses).length, 'statuses');
+  });
+}
+
+// ── SPA navigation router ─────────────────────────────────────────────────
+
+/**
+ * Routes the current page to the appropriate init function.
+ * Called on initial load and on every SPA URL change detected by the observer.
+ * Detail page init (initDetailPage) will be added in Task 2 (INJC-02).
+ */
+function routePage() {
+  const path = location.pathname;
+  const search = location.search;
+
+  // Search results: /nx/search/jobs or /search?... with query params
+  const isSearchPage = (
+    path.includes('/search') ||
+    (path.includes('/jobs') && !path.match(/\/jobs\/~[a-z0-9]+/i))
+  ) && (search.includes('q=') || path.includes('/search'));
+
+  if (isSearchPage) {
+    // Wait for job cards to render in the SPA
+    setTimeout(initSearchPage, 1500);
+  }
+}
+
+// Observe URL changes for SPA navigation
+let lastPath = location.pathname;
+const _spaObserver = new MutationObserver(() => {
+  if (location.pathname !== lastPath) {
+    lastPath = location.pathname;
+    console.debug('[upwork-ext] SPA navigation detected:', location.pathname);
+    routePage();
+  }
+});
+_spaObserver.observe(document.body, { childList: true, subtree: true });
+
+// Run on initial script load
+routePage();

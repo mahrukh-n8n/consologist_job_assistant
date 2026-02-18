@@ -103,6 +103,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep channel open for async response
   }
 
+  // Fetch match statuses for a list of job IDs from n8n match endpoint
+  // Message format: { action: 'GET_MATCH_STATUS', jobIds: ['id1', 'id2', ...] }
+  // Response: { success: true, statuses: { id1: 'match', id2: 'no_match', ... } }
+  //        or { success: false, error: '...', statuses: {} }
+  if (message.action === 'GET_MATCH_STATUS') {
+    handleMatchStatus(message).then(sendResponse);
+    return true; // keep port open for async response
+  }
+
   return false; // synchronous response for unhandled messages
 });
 
@@ -185,5 +194,52 @@ async function runScheduledScrape() {
       lastScrapeJobs: jobs,
       lastScrapeTime: new Date().toISOString(),
     });
+  }
+}
+
+// ─── Match status handler ─────────────────────────────────────────────────────
+
+/**
+ * Fetches match statuses for a list of job IDs from the n8n match endpoint.
+ *
+ * Reads matchWebhookUrl from storage. Falls back to webhookUrl + '/match'.
+ * Returns { success: true, statuses: { jobId: 'match'|'no_match'|'applied' } }
+ *       or { success: false, error: '...', statuses: {} }
+ *
+ * @param {{ jobIds: string[] }} message
+ * @returns {Promise<{ success: boolean, statuses: object, error?: string }>}
+ */
+async function handleMatchStatus(message) {
+  const { matchWebhookUrl, webhookUrl } = await chrome.storage.local.get({
+    matchWebhookUrl: '',
+    webhookUrl: '',
+  });
+
+  const url = matchWebhookUrl || (webhookUrl ? webhookUrl + '/match' : '');
+
+  if (!url) {
+    console.warn('[upwork-ext] GET_MATCH_STATUS: no match URL configured');
+    return { success: false, error: 'no match URL configured', statuses: {} };
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_ids: message.jobIds }),
+    });
+
+    if (!response.ok) {
+      const msg = `HTTP ${response.status}`;
+      console.warn('[upwork-ext] GET_MATCH_STATUS failed:', msg);
+      return { success: false, error: msg, statuses: {} };
+    }
+
+    const statuses = await response.json();
+    console.debug('[upwork-ext] GET_MATCH_STATUS received statuses for', Object.keys(statuses).length, 'jobs');
+    return { success: true, statuses };
+  } catch (err) {
+    console.warn('[upwork-ext] GET_MATCH_STATUS failed:', err.message);
+    return { success: false, error: err.message, statuses: {} };
   }
 }
