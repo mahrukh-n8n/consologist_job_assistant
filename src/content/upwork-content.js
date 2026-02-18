@@ -525,8 +525,8 @@ function routePage() {
     // Wait briefly for SPA content to render before injecting button
     setTimeout(initDetailPage, 500);
   } else if (isSearchPage) {
-    // initSearchPage retries internally every 800ms — no outer delay needed
-    initSearchPage();
+    // Wait 5s for Upwork SPA to fully render before first card check
+    setTimeout(initSearchPage, 5000);
   }
 }
 
