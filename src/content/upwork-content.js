@@ -10,7 +10,8 @@
 
 function extractJobId(url) {
   if (!url) return null;
-  const match = url.match(/_~([a-zA-Z0-9]+)/);
+  // Handles both /~ (new format) and _~ (old format) Upwork URL patterns
+  const match = url.match(/[/_]~([a-zA-Z0-9]+)/);
   return match ? match[1] : null;
 }
 
@@ -83,45 +84,52 @@ function scrapeDetailPage() {
   const pageUrl = window.location.href;
   const job_id = extractJobId(pageUrl);
 
+  // title — Upwork renders in span.text-base.flex-1, not h1
   const title = firstText([
+    'span.text-base.flex-1',
     '[data-test="job-title"] h1',
     'h1.job-title',
     'h1',
   ]);
 
+  // description — air3-card-section containing "Summary" heading
   let description = null;
-  const descSelectors = [
-    '[data-test="description"]',
-    '.description',
-    '.job-description',
-  ];
-  for (const sel of descSelectors) {
-    const container = document.querySelector(sel);
-    if (container) {
-      const paragraphs = Array.from(container.querySelectorAll('p'));
-      const text = paragraphs.length
-        ? paragraphs.map(p => p.textContent.trim()).filter(Boolean).join('\n\n')
-        : container.textContent.trim();
-      if (text) { description = text; break; }
+  for (const section of document.querySelectorAll('.air3-card-section')) {
+    const heading = section.querySelector('strong');
+    if (heading && heading.textContent.trim() === 'Summary') {
+      description = section.textContent.replace('Summary', '').trim() || null;
+      break;
+    }
+  }
+  if (!description) {
+    const descSelectors = ['[data-test="description"]', '.job-description'];
+    for (const sel of descSelectors) {
+      const el = document.querySelector(sel);
+      if (el) { description = el.textContent.trim() || null; break; }
     }
   }
 
+  // budget — strong inside p.m-0
   const budget = firstText([
+    'p.m-0 > strong',
     '[data-test="budget"]',
     '[data-test="hourly-rate"]',
     '.budget',
     '.hourly-rate',
   ]);
 
+  // payment_type — div.description or span.type contains "Fixed-price" or "Hourly"
   let payment_type = null;
-  const jobTypeEl = document.querySelector('[data-test="job-type"]');
-  if (jobTypeEl) {
-    const raw = jobTypeEl.textContent.toLowerCase();
-    payment_type = raw.includes('hourly') ? 'hourly' : 'fixed';
+  const paymentTypeEl = document.querySelector('div.description, span.type');
+  if (paymentTypeEl) {
+    const raw = paymentTypeEl.textContent.toLowerCase();
+    if (raw.includes('hourly')) payment_type = 'hourly';
+    else if (raw.includes('fixed')) payment_type = 'fixed';
   } else if (budget) {
     payment_type = budget.toLowerCase().includes('/hr') ? 'hourly' : 'fixed';
   }
 
+  // skills — .skills-list .badge works on current Upwork DOM
   const skillSelectors = [
     '[data-test="skill-badge"]',
     '.skill-badge',
@@ -137,56 +145,134 @@ function scrapeDetailPage() {
     }
   }
 
+  // experience_level — strong inside .features.list-unstyled.m-0
   const experience_level = firstText([
+    '.features.list-unstyled.m-0 strong',
     '[data-test="experience-level"]',
     '.experience-level',
     '[data-test="contractor-tier"]',
   ]);
 
-  const project_duration = firstText([
-    '[data-test="duration"]',
-    '[data-test="project-duration"]',
-    '.duration',
-    '.project-duration',
-  ]);
+  // project_duration — .segmentations contains "Project Type: Ongoing project"
+  let project_duration = null;
+  const segEl = document.querySelector('.segmentations');
+  if (segEl) {
+    const segText = segEl.textContent.trim();
+    project_duration = segText.replace(/^Project\s*Type:\s*/i, '').trim() || null;
+  }
+  if (!project_duration) {
+    project_duration = firstText([
+      '[data-test="duration"]',
+      '[data-test="project-duration"]',
+      '.duration',
+      '.project-duration',
+    ]);
+  }
 
+  // posted_date — span containing "ago" inside the first air3-card-section
   let posted_date = null;
   const timeEl = document.querySelector('[data-test="posted-on"] time, time[datetime]');
   if (timeEl) {
     posted_date = timeEl.getAttribute('datetime') || timeEl.textContent.trim() || null;
-  } else {
+  }
+  if (!posted_date) {
+    const firstCard = document.querySelector('.air3-card-section');
+    if (firstCard) {
+      for (const span of firstCard.querySelectorAll('span')) {
+        const t = span.textContent.trim();
+        if (t.includes('ago') && t.length < 30) { posted_date = t; break; }
+      }
+    }
+  }
+  if (!posted_date) {
     posted_date = firstText(['[data-test="posted-on"]', '.posted-on', '.posted-date']);
   }
 
-  const proposals_count = firstText([
-    '[data-test="proposals"]',
-    '.proposals-count',
-    '[data-test="proposals-count"]',
-  ]);
+  // proposals_count — span.value matching "Less than N" or "N to M" patterns
+  let proposals_count = null;
+  for (const span of document.querySelectorAll('span.value')) {
+    const t = span.textContent.trim();
+    if (/^(Less than|\d)/.test(t) && !t.includes('ago') && !t.includes('hour') && !t.includes('day') && !t.includes('minute')) {
+      proposals_count = t;
+      break;
+    }
+  }
+  if (!proposals_count) {
+    proposals_count = firstText([
+      '[data-test="proposals"]',
+      '.proposals-count',
+      '[data-test="proposals-count"]',
+    ]);
+  }
 
-  const paymentVerifiedEl = document.querySelector(
-    '[data-test="payment-verified"], .payment-verified, [data-test="payment-status-verified"]'
-  );
-  const client_payment_verified = paymentVerifiedEl !== null;
+  // client_payment_verified — strong containing "Payment method verified"
+  let client_payment_verified = false;
+  for (const strong of document.querySelectorAll('strong')) {
+    if (strong.textContent.includes('Payment method verified')) {
+      client_payment_verified = true;
+      break;
+    }
+  }
+  if (!client_payment_verified) {
+    const el = document.querySelector('[data-test="payment-verified"], .payment-verified');
+    client_payment_verified = el !== null;
+  }
 
-  const client_location = firstText([
-    '[data-test="client-location"]',
-    '.client-location',
-    '[data-test="location"]',
-  ]);
+  // client_location — first strong in .features.text-light-on-muted.list-unstyled
+  // that doesn't contain "$", "jobs", or "rate"
+  let client_location = null;
+  const clientList = document.querySelector('.features.text-light-on-muted.list-unstyled');
+  if (clientList) {
+    for (const strong of clientList.querySelectorAll('strong')) {
+      const t = strong.textContent.trim();
+      if (!t.includes('$') && !t.includes('jobs') && !t.includes('rate') && !t.includes('verified')) {
+        client_location = t;
+        break;
+      }
+    }
+  }
+  if (!client_location) {
+    client_location = firstText([
+      '[data-test="client-location"]',
+      '.client-location',
+      '[data-test="location"]',
+    ]);
+  }
 
-  const client_rating = firstText([
-    '[data-test="client-rating"] .rating',
-    '[data-test="client-rating"]',
-    '.client-rating .rating',
-    '.client-rating',
-  ]);
+  // client_rating — parse from span.sr-only "Rating is X.X out of 5"
+  let client_rating = null;
+  for (const span of document.querySelectorAll('span.sr-only')) {
+    const text = span.textContent.trim();
+    if (text.startsWith('Rating is')) {
+      const match = text.match(/Rating is (\d+\.?\d*) out of/);
+      if (match) { client_rating = match[1]; break; }
+    }
+  }
+  if (!client_rating) {
+    client_rating = firstText([
+      '[data-test="client-rating"] .rating',
+      '[data-test="client-rating"]',
+      '.client-rating',
+    ]);
+  }
 
-  const client_total_spent = firstText([
-    '[data-test="total-spent"]',
-    '.total-spent',
-    '[data-test="client-total-spent"]',
-  ]);
+  // client_total_spent — strong containing "total spent" in the client info list
+  let client_total_spent = null;
+  if (clientList) {
+    for (const strong of clientList.querySelectorAll('strong')) {
+      if (strong.textContent.includes('total spent')) {
+        client_total_spent = strong.textContent.replace('total spent', '').trim();
+        break;
+      }
+    }
+  }
+  if (!client_total_spent) {
+    client_total_spent = firstText([
+      '[data-test="total-spent"]',
+      '.total-spent',
+      '[data-test="client-total-spent"]',
+    ]);
+  }
 
   const job = {
     job_id,
@@ -206,7 +292,7 @@ function scrapeDetailPage() {
     client_total_spent,
   };
 
-  console.debug('[upwork-ext] detail scrape:', job_id, '— fields populated:', Object.values(job).filter(v => v !== null && v !== false).length, '/ 15');
+  console.debug('[upwork-ext] detail scrape:', job_id, '— fields populated:', Object.values(job).filter(v => v !== null && v !== false && !(Array.isArray(v) && v.length === 0)).length, '/ 15');
 
   return job;
 }
