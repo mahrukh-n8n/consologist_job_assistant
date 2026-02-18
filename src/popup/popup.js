@@ -1,8 +1,142 @@
-// Upwork Job Scraper — Popup Script
-// Handles: settings load/save, UI event binding
-// Storage: chrome.storage.local (all settings persisted here)
+// Upwork Job Scraper — Popup Settings
+// Pattern: NotificationManager safe-fail (global class registry) adapted for chrome.storage
+// All storage operations wrapped in try/catch — errors shown in UI, never crash popup
 
+// ─── Default values ──────────────────────────────────────────────────────────
+const DEFAULTS = {
+  webhookUrl: '',
+  scheduleInterval: 30,
+  outputFormat: 'both',
+  notifications: {
+    master: true,
+    scrapeComplete: true,
+    webhookSent: true,
+    proposalLoaded: true,
+    errors: true,
+  },
+};
+
+// ─── DOM refs ─────────────────────────────────────────────────────────────────
+const els = {
+  webhookUrl:          () => document.getElementById('webhook-url'),
+  scheduleInterval:    () => document.getElementById('schedule-interval'),
+  outputFormat:        () => document.querySelector('input[name="outputFormat"]:checked'),
+  outputFormatAll:     () => document.querySelectorAll('input[name="outputFormat"]'),
+  notifMaster:         () => document.getElementById('notif-master'),
+  notifSubtypes:       () => document.getElementById('notif-subtypes'),
+  notifScrapeComplete: () => document.getElementById('notif-scrape-complete'),
+  notifWebhookSent:    () => document.getElementById('notif-webhook-sent'),
+  notifProposalLoaded: () => document.getElementById('notif-proposal-loaded'),
+  notifErrors:         () => document.getElementById('notif-errors'),
+  saveBtn:             () => document.getElementById('save-btn'),
+  saveStatus:          () => document.getElementById('save-status'),
+};
+
+// ─── Status display ───────────────────────────────────────────────────────────
+function showStatus(message, isError = false) {
+  const el = els.saveStatus();
+  el.textContent = message;
+  el.className = 'save-status' + (isError ? ' error' : '');
+  // Auto-clear after 2.5s
+  setTimeout(() => {
+    if (el.textContent === message) {
+      el.textContent = '';
+      el.className = 'save-status';
+    }
+  }, 2500);
+}
+
+// ─── Master toggle — dims subtypes when disabled ───────────────────────────
+function applyMasterToggleState(masterChecked) {
+  const subtypes = els.notifSubtypes();
+  if (masterChecked) {
+    subtypes.classList.remove('disabled');
+  } else {
+    subtypes.classList.add('disabled');
+  }
+}
+
+// ─── Load settings from storage ──────────────────────────────────────────────
+async function loadSettings() {
+  try {
+    const stored = await chrome.storage.local.get(null); // get all keys
+
+    // Merge stored values over defaults (deep merge for notifications object)
+    const settings = {
+      webhookUrl:       stored.webhookUrl       ?? DEFAULTS.webhookUrl,
+      scheduleInterval: stored.scheduleInterval ?? DEFAULTS.scheduleInterval,
+      outputFormat:     stored.outputFormat     ?? DEFAULTS.outputFormat,
+      notifications: {
+        master:          stored['notifications.master']         ?? DEFAULTS.notifications.master,
+        scrapeComplete:  stored['notifications.scrapeComplete'] ?? DEFAULTS.notifications.scrapeComplete,
+        webhookSent:     stored['notifications.webhookSent']    ?? DEFAULTS.notifications.webhookSent,
+        proposalLoaded:  stored['notifications.proposalLoaded'] ?? DEFAULTS.notifications.proposalLoaded,
+        errors:          stored['notifications.errors']         ?? DEFAULTS.notifications.errors,
+      },
+    };
+
+    // Apply to DOM
+    els.webhookUrl().value = settings.webhookUrl;
+
+    els.scheduleInterval().value = String(settings.scheduleInterval);
+
+    els.outputFormatAll().forEach(radio => {
+      radio.checked = (radio.value === settings.outputFormat);
+    });
+
+    els.notifMaster().checked        = settings.notifications.master;
+    els.notifScrapeComplete().checked = settings.notifications.scrapeComplete;
+    els.notifWebhookSent().checked    = settings.notifications.webhookSent;
+    els.notifProposalLoaded().checked = settings.notifications.proposalLoaded;
+    els.notifErrors().checked         = settings.notifications.errors;
+
+    applyMasterToggleState(settings.notifications.master);
+
+  } catch (err) {
+    // Safe-fail: log and surface in UI, never crash popup (NotificationManager pattern)
+    console.error('[Popup] Failed to load settings:', err);
+    showStatus('Failed to load settings', true);
+  }
+}
+
+// ─── Save settings to storage ─────────────────────────────────────────────────
+async function saveSettings() {
+  try {
+    const selectedFormat = els.outputFormat();
+
+    const settings = {
+      webhookUrl:                      els.webhookUrl().value.trim(),
+      scheduleInterval:                parseInt(els.scheduleInterval().value, 10),
+      outputFormat:                    selectedFormat ? selectedFormat.value : DEFAULTS.outputFormat,
+      'notifications.master':          els.notifMaster().checked,
+      'notifications.scrapeComplete':  els.notifScrapeComplete().checked,
+      'notifications.webhookSent':     els.notifWebhookSent().checked,
+      'notifications.proposalLoaded':  els.notifProposalLoaded().checked,
+      'notifications.errors':          els.notifErrors().checked,
+    };
+
+    await chrome.storage.local.set(settings);
+
+    console.log('[Popup] Settings saved:', settings);
+    showStatus('Saved');
+
+  } catch (err) {
+    // Safe-fail: surface error in UI, do not throw (NotificationManager pattern)
+    console.error('[Popup] Failed to save settings:', err);
+    showStatus('Failed to save', true);
+  }
+}
+
+// ─── Event bindings ───────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[Popup] Settings UI loaded');
-  // Settings form binding added in Plan 01-02
+  // Load on open
+  loadSettings();
+
+  // Master notification toggle dims subtypes immediately on change
+  els.notifMaster().addEventListener('change', (e) => {
+    applyMasterToggleState(e.target.checked);
+  });
+
+  // Save button
+  els.saveBtn().addEventListener('click', saveSettings);
 });
