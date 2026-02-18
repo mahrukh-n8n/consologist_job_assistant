@@ -30,6 +30,8 @@ const els = {
   notifErrors:         () => document.getElementById('notif-errors'),
   saveBtn:             () => document.getElementById('save-btn'),
   saveStatus:          () => document.getElementById('save-status'),
+  scrapeBtn:           () => document.getElementById('scrape-btn'),
+  scrapeStatus:        () => document.getElementById('scrape-status'),
 };
 
 // ─── Status display ───────────────────────────────────────────────────────────
@@ -44,6 +46,43 @@ function showStatus(message, isError = false) {
       el.className = 'save-status';
     }
   }, 2500);
+}
+
+// ─── Scrape status display ────────────────────────────────────────────────────
+function showScrapeStatus(message, isError = false) {
+  const el = els.scrapeStatus();
+  el.textContent = message;
+  el.className = 'save-status' + (isError ? ' error' : '');
+  // Auto-clear after 2.5s
+  setTimeout(() => {
+    if (el.textContent === message) {
+      el.textContent = '';
+      el.className = 'save-status';
+    }
+  }, 2500);
+}
+
+// ─── On-demand scrape trigger ─────────────────────────────────────────────────
+async function triggerScrape() {
+  try {
+    // Query the active tab in the current window
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab) {
+      showScrapeStatus('No active tab found', true);
+      return;
+    }
+    // Send scrapeSearch to the content script on the active tab
+    const response = await chrome.tabs.sendMessage(tab.id, { action: 'scrapeSearch' });
+    if (response && Array.isArray(response.jobs)) {
+      showScrapeStatus(`Scraped ${response.jobs.length} job${response.jobs.length !== 1 ? 's' : ''}`);
+    } else {
+      showScrapeStatus('Scrape returned no data', true);
+    }
+  } catch (err) {
+    // Safe-fail: content script may not be injected on non-Upwork tabs
+    console.error('[Popup] Scrape failed:', err);
+    showScrapeStatus('Scrape failed — open an Upwork search page', true);
+  }
 }
 
 // ─── Master toggle — dims subtypes when disabled ───────────────────────────
@@ -150,4 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Save button
   els.saveBtn().addEventListener('click', saveSettings);
+
+  // Scrape Now button
+  els.scrapeBtn().addEventListener('click', triggerScrape);
 });
