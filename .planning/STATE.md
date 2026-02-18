@@ -10,28 +10,29 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Position
 
 Phase: 2 of 4 (Scraping Engine)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-18 — Completed 01-02 settings popup UI, Phase 1 complete
+Last activity: 2026-02-18 — Completed 02-01 search page scraper and URL parser utility
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 2
-- Average duration: 6min
-- Total execution time: 0.2 hours
+- Total plans completed: 3
+- Average duration: ~6min
+- Total execution time: ~0.28 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation | 2/2 | ~12min | ~6min |
+| 02-scraping-engine | 1/3 | ~5min | ~5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2min), 01-02 (10min)
-- Trend: —
+- Last 5 plans: 01-01 (2min), 01-02 (10min), 02-01 (5min)
+- Trend: Consistent
 
 *Updated after each plan completion*
 
@@ -52,6 +53,8 @@ Recent decisions affecting current work:
 - Flat dot-notation storage keys for notifications (e.g., 'notifications.master') — future phases can read individual keys without loading full sub-object
 - chrome.storage.local.get(null) on popup open for single-call load merged over DEFAULTS via ?? operator
 - Master notification toggle uses CSS .disabled class (not disabled attribute) so sub-values are still saved when master is off
+- Cascading selector fallbacks for Upwork job card and title link selectors — insulates scraper against DOM changes
+- Skip cards missing job_id or title (guard-and-continue) — downstream consumers receive clean uniform arrays only
 
 ### Pending Todos
 
@@ -65,5 +68,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 01-02-PLAN.md — settings popup UI complete, Phase 1 complete, ready for Phase 2 scraping engine
+Stopped at: Completed 02-01-PLAN.md — search page scraper and job-parser utility complete, ready for 02-02
 Resume file: None
