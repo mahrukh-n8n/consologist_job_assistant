@@ -190,3 +190,25 @@ footer {
 #save-btn:active {
   background: #0d7300;
 }
+
+/* NOTF-02: Extension action status display */
+.ext-status {
+  font-size: 11px;
+  min-height: 0;
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 14px;
+  transition: max-height 0.2s ease, padding 0.2s ease;
+  color: #14a800;
+}
+
+.ext-status.visible {
+  min-height: 24px;
+  max-height: 60px;
+  padding: 6px 14px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.ext-status.error {
+  color: #dc2626;
+}

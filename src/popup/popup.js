@@ -33,6 +33,7 @@ const els = {
   scrapeBtn:           () => document.getElementById('scrape-btn'),
   scrapeStatus:        () => document.getElementById('scrape-status'),
   exportCsvBtn:        () => document.getElementById('export-csv-btn'),
+  extStatus:           () => document.getElementById('ext-status'),
 };
 
 // ─── Status display ───────────────────────────────────────────────────────────
@@ -61,6 +62,26 @@ function showScrapeStatus(message, isError = false) {
       el.className = 'save-status';
     }
   }, 2500);
+}
+
+// ─── Extension action status (NOTF-02) ────────────────────────────────────────
+// Shows service worker response feedback (webhook, proposal, errors).
+// Distinct from showStatus() which is for save-button feedback only.
+let extStatusTimer = null;
+
+function showExtStatus(message, type = 'success') {
+  const el = document.getElementById('ext-status');
+  if (!el) return;
+  el.textContent = message;
+  el.className = 'ext-status visible' + (type === 'error' ? ' error' : '');
+  // Cancel any pending auto-clear
+  if (extStatusTimer) clearTimeout(extStatusTimer);
+  // Auto-clear after 5 seconds
+  extStatusTimer = setTimeout(() => {
+    el.textContent = '';
+    el.className = 'ext-status';
+    extStatusTimer = null;
+  }, 5000);
 }
 
 // ─── On-demand scrape trigger ─────────────────────────────────────────────────
@@ -231,3 +252,22 @@ document.addEventListener('DOMContentLoaded', () => {
   // Scrape Now button
   els.scrapeBtn().addEventListener('click', triggerScrape);
 });
+
+// ─── Pattern for future action buttons (Phases 2-3 popup additions) ──────────
+// When adding scrape/webhook action buttons, wire responses like this:
+//
+//   chrome.runtime.sendMessage({ action: 'SCRAPE_SEARCH' }, (response) => {
+//     if (response && response.error) {
+//       showExtStatus('Error: ' + response.error, 'error');
+//     } else if (response) {
+//       showExtStatus('Scraped ' + (response.jobs?.length ?? 0) + ' jobs', 'success');
+//     }
+//   });
+//
+//   chrome.runtime.sendMessage({ action: 'LOAD_PROPOSAL', jobData }, (response) => {
+//     if (response && response.error) {
+//       showExtStatus('Proposal error: ' + response.error, 'error');
+//     } else if (response) {
+//       showExtStatus('Proposal: loaded', 'success');
+//     }
+//   });
