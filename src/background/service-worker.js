@@ -214,17 +214,14 @@ async function runScheduledScrape() {
  * @returns {Promise<{ success: boolean, statuses: object, error?: string }>}
  */
 async function handleMatchStatus(message) {
-  const { matchWebhookUrl, webhookUrl } = await chrome.storage.local.get({
-    matchWebhookUrl: '',
-    webhookUrl: '',
-  });
+  const { webhookUrl } = await chrome.storage.local.get({ webhookUrl: '' });
 
-  const url = matchWebhookUrl || (webhookUrl ? webhookUrl + '/match' : '');
-
-  if (!url) {
-    console.warn('[upwork-ext] GET_MATCH_STATUS: no match URL configured');
+  if (!webhookUrl) {
+    console.warn('[upwork-ext] GET_MATCH_STATUS: no webhook URL configured');
     return { success: false, error: 'no match URL configured', statuses: {} };
   }
+
+  const url = webhookUrl;
 
   try {
     const response = await fetch(url, {
