@@ -3,6 +3,8 @@
 // Adapts: WebhookUtility retry/backoff pattern (global class) via fetch API
 // Adapts: EnvironmentAdapter message-passing pattern via chrome.runtime.onMessage
 
+import { WebhookClient } from '../utils/webhook-client.js';
+
 console.log('[SW] Consologit_Job_Assistant service worker started');
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -52,7 +54,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep channel open for async response
   }
 
-  // Handlers added in later phases
+  // Push scraped jobs to n8n webhook
+  // Message format: { action: 'PUSH_JOBS', jobs: [ { job_id, title, url, ... } ] }
+  if (message.action === 'PUSH_JOBS') {
+    (async () => {
+      // Guard: jobs must be a non-empty array
+      if (!message.jobs || !Array.isArray(message.jobs) || message.jobs.length === 0) {
+        sendResponse({ success: false, error: 'no jobs provided' });
+        return;
+      }
+
+      // Read webhook settings from storage
+      const { webhookUrl, outputMode } = await chrome.storage.local.get({
+        webhookUrl: '',
+        outputMode: 'webhook',
+      });
+
+      // Guard: skip if outputMode is csv-only
+      if (outputMode === 'csv') {
+        console.log('WebhookClient: skipping webhook push, outputMode is csv-only');
+        sendResponse({ success: false, skipped: true });
+        return;
+      }
+
+      // Guard: skip if no webhook URL configured
+      if (!webhookUrl) {
+        console.log('WebhookClient: no webhook URL configured');
+        sendResponse({ success: false, skipped: true });
+        return;
+      }
+
+      // Dispatch each job via WebhookClient
+      const client = new WebhookClient();
+      let sent = 0;
+      let failed = 0;
+
+      for (const job of message.jobs) {
+        const ok = await client.dispatchJob(webhookUrl, job);
+        if (ok) {
+          sent++;
+        } else {
+          failed++;
+        }
+      }
+
+      sendResponse({ success: true, sent, failed });
+    })();
+    return true; // keep channel open for async response
+  }
+
   return false; // synchronous response for unhandled messages
 });
 
