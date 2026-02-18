@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Upwork Job Scraper",
+  "name": "Consologit_Job_Assistant",
   "version": "0.1.0",
   "description": "Scrapes Upwork job listings and pushes to n8n webhooks on a schedule.",
 
@@ -36,7 +36,7 @@
       "48": "icons/icon48.svg",
       "128": "icons/icon128.svg"
     },
-    "default_title": "Upwork Job Scraper"
+    "default_title": "Consologit_Job_Assistant"
   },
 
   "icons": {
