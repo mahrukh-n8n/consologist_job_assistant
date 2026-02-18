@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Position
 
 Phase: 3 of 4 (Webhook Integration, Search Overlay, and CSV Export) — IN PROGRESS
-Plan: 2 of 3 completed (03-02 search overlay + scrape button at human-verify checkpoint)
-Status: 03-02 at checkpoint — INJC-01 icons and INJC-02 scrape button implemented; awaiting human verification before proceeding to 03-03 (CSV export)
-Last activity: 2026-02-18 — Completed 03-02 search overlay and detail page scrape button implementation
+Plan: 3 of 3 at checkpoint (03-03 CSV export tasks complete; awaiting human verification)
+Status: 03-03 at checkpoint:human-verify — CsvExporter utility, EXPORT_CSV handler, and Export CSV popup button implemented; awaiting human verification
+Last activity: 2026-02-18 — Completed 03-03 CSV export implementation (Tasks 1-2); at checkpoint
 
-Progress: [███████░░░] 70%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 5 (+ 03-03 at checkpoint)
 - Average duration: ~6min
 - Total execution time: ~0.39 hours
 
@@ -29,10 +29,10 @@ Progress: [███████░░░] 70%
 |-------|-------|-------|----------|
 | 01-foundation | 2/2 | ~12min | ~6min |
 | 02-scraping-engine | 4/4 | ~28min | ~7min |
-| 03-webhook-integration-search-overlay | 2/3 | ~23min | ~11min |
+| 03-webhook-integration-search-overlay | 2/3 complete + 03-03 at checkpoint | ~26min | ~9min |
 
 **Recent Trend:**
-- Last 5 plans: 02-02 (8min), 02-03 (12min), 02-04 (3min), 03-01 (8min), 03-02 (15min)
+- Last 5 plans: 02-03 (12min), 02-04 (3min), 03-01 (8min), 03-02 (15min), 03-03 (3min so far)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -42,6 +42,7 @@ Progress: [███████░░░] 70%
 | Phase 03-webhook-integration P01 | 8 | 2 tasks | 2 files |
 | Phase 03-webhook-integration-search-overlay P01 | 8 | 2 tasks | 2 files |
 | Phase 03-webhook-integration-search-overlay P02 | 15 | 2 tasks | 4 files |
+| Phase 03-webhook-integration-search-overlay P03 | 3 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,10 @@ Recent decisions affecting current work:
 - [Phase 03-02]: Initial search page delay set to 5s for first SPA render after cold page load
 - [Phase 03-02]: job-transformer.js maps Phase 2 scraper fields to reference n8n schema — applied before WebhookClient dispatch in service worker
 - [Phase 03-02]: postedAt defaults to today's ISO date when posted_date missing — downstream n8n expects a date string always
+- [Phase 03-03]: CsvExporter uses 44-field FIELD_ORDER matching full reference n8n project schema — not the 15-field scraper output schema; receives pre-transformed objects
+- [Phase 03-03]: outputFormat guard checks for 'webhook' specifically — 'both' and 'csv' both permit CSV export
+- [Phase 03-03]: data: URI download pattern used (not Blob/URL.createObjectURL) — MV3 service worker restriction
+- [Phase 03-03]: sendExportCsv() wraps sendMessage in Promise for async/await with chrome.runtime.lastError handling
 
 ### Pending Todos
 
@@ -92,9 +97,10 @@ None yet.
 
 - Webhook dependency: n8n must be running for match icons and proposal loading to work during manual testing
 - Field name compatibility: all scraped data keys must be verified against reference project before Phase 3 ships (PUSH_JOBS now wired; manual n8n test recommended before Phase 3 ships)
+- 03-03 checkpoint: CsvExporter uses 44-column reference n8n schema; if job-transformer.js does not populate these fields, the CSV will have mostly empty columns. The stored lastScrapedJobs may need to be the full reference-schema objects (not just the 15 scraper fields). Human verification will confirm.
 
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: 03-02-PLAN.md checkpoint:human-verify — INJC-01 search overlay icons and INJC-02 detail page scrape button implemented; awaiting human verification before 03-03
+Stopped at: 03-03-PLAN.md checkpoint:human-verify — CsvExporter utility (44-field reference schema), EXPORT_CSV service worker handler, and Export CSV popup button implemented; awaiting human verification
 Resume file: None
