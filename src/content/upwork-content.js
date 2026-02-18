@@ -526,11 +526,13 @@ function routePage() {
 }
 
 // Observe URL changes for SPA navigation
-let lastPath = location.pathname;
+// Track full href (not just pathname) so search-to-search navigation
+// (same /nx/search/jobs/ path, different ?q= params) also re-triggers.
+let lastUrl = location.href;
 const _spaObserver = new MutationObserver(() => {
-  if (location.pathname !== lastPath) {
-    lastPath = location.pathname;
-    console.debug('[upwork-ext] SPA navigation detected:', location.pathname);
+  if (location.href !== lastUrl) {
+    lastUrl = location.href;
+    console.debug('[upwork-ext] SPA navigation detected:', location.href);
     routePage();
   }
 });
