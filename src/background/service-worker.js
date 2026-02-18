@@ -86,6 +86,27 @@ async function handleExportCsv() {
   return { success: true, count: lastScrapedJobs.length };
 }
 
+// ─── Notification helper (NOTF-01) ────────────────────────────────────────────
+// Reads from flat dot-notation keys set by Phase 1 popup settings.
+// type: 'scrapeComplete' | 'webhookSent' | 'proposalLoaded' | 'errors'
+async function fireNotification(type, message) {
+  try {
+    const keys = ['notifications.master', `notifications.${type}`];
+    const settings = await chrome.storage.local.get(keys);
+    if (!settings['notifications.master']) return;
+    if (!settings[`notifications.${type}`]) return;
+    chrome.notifications.create('ext-notif-' + Date.now(), {
+      type: 'basic',
+      iconUrl: 'icons/icon48.svg',
+      title: 'Consologit_Job_Assistant',
+      message
+    });
+  } catch (err) {
+    // Safe-fail: notification failures must never crash the service worker
+    console.error('[SW] fireNotification failed:', err);
+  }
+}
+
 // ─── Message router ───────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[SW] Message received:', message.action || message.type);
@@ -110,6 +131,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       // Guard: jobs must be a non-empty array
       if (!message.jobs || !Array.isArray(message.jobs) || message.jobs.length === 0) {
+        await fireNotification('errors', 'Webhook: no jobs provided');
         sendResponse({ success: false, error: 'no jobs provided' });
         return;
       }
@@ -151,6 +173,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       }
 
+      // NOTF-01: toast notification for webhook sent
+      await fireNotification('webhookSent', `Webhook: sent ${sent} jobs`);
       sendResponse({ success: true, sent, failed });
     })();
     return true; // keep channel open for async response
@@ -169,7 +193,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Message format: { action: 'EXPORT_CSV' }
   // Response: { success: true, count: N } | { success: false, reason: 'csv_disabled'|'no_data', message: '...' }
   if (message.action === 'EXPORT_CSV') {
-    handleExportCsv(message).then(sendResponse);
+    handleExportCsv(message).then(async (result) => {
+      // NOTF-01: toast notification for CSV export success
+      // Placeholder for SCRAPE_SEARCH success: await fireNotification('scrapeComplete', `Scraped ${jobs.length} jobs from search`);
+      // Placeholder for SCRAPE_DETAIL success: await fireNotification('scrapeComplete', 'Job detail scraped');
+      if (result && result.success) {
+        await fireNotification('scrapeComplete', 'CSV exported to downloads folder');
+      } else if (result && !result.success) {
+        await fireNotification('errors', `Export failed: ${result.message || result.reason}`);
+      }
+      sendResponse(result);
+    });
     return true; // keep port open for async response
   }
 
@@ -312,9 +346,13 @@ async function handleLoadProposal(jobData, sendResponse) {
       proposalText = await response.text();
     }
 
+    // NOTF-01: toast notification for proposal loaded
+    await fireNotification('proposalLoaded', 'Proposal loaded');
     sendResponse({ proposal: proposalText.trim() });
 
   } catch (err) {
+    // NOTF-01: toast notification for proposal error
+    await fireNotification('errors', `Proposal load failed: ${err.message}`);
     sendResponse({ error: `Proposal load failed: ${err.message}` });
   }
 }
