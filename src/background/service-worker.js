@@ -5,6 +5,7 @@
 
 import { WebhookClient } from '../utils/webhook-client.js';
 import { transformJob } from '../utils/job-transformer.js';
+import { CsvExporter } from '../utils/csv-exporter.js';
 
 console.log('[SW] Consologit_Job_Assistant service worker started');
 
@@ -35,6 +36,54 @@ async function registerAlarmFromStorage() {
     periodInMinutes: scheduleInterval,
   });
   console.debug('[upwork-ext] alarm registered:', scheduleInterval, 'min');
+}
+
+// ─── CSV export handler ───────────────────────────────────────────────────────
+
+/**
+ * Generates and downloads a CSV of the most recently scraped jobs.
+ *
+ * Guards:
+ * 1. outputFormat === 'webhook' → csv_disabled (no download)
+ * 2. lastScrapedJobs missing, not array, or empty → no_data (no download)
+ *
+ * Uses data: URI download (MV3 service worker — no Blob/URL.createObjectURL).
+ *
+ * @returns {Promise<{ success: boolean, count?: number, reason?: string, message?: string }>}
+ */
+async function handleExportCsv() {
+  const { outputFormat, lastScrapedJobs } = await chrome.storage.local.get({
+    outputFormat: 'both',
+    lastScrapedJobs: null,
+  });
+
+  // Guard: CSV export disabled when outputFormat is webhook-only
+  if (outputFormat === 'webhook') {
+    return {
+      success: false,
+      reason: 'csv_disabled',
+      message: 'CSV export is disabled for webhook-only mode',
+    };
+  }
+
+  // Guard: no scraped data available
+  if (!lastScrapedJobs || !Array.isArray(lastScrapedJobs) || lastScrapedJobs.length === 0) {
+    return {
+      success: false,
+      reason: 'no_data',
+      message: 'No scraped jobs to export',
+    };
+  }
+
+  // Generate CSV string
+  const exporter = new CsvExporter();
+  const csvString = exporter.generateCsv(lastScrapedJobs);
+
+  // Trigger download via data: URI (MV3-safe — no Blob/URL.createObjectURL)
+  const dataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvString);
+  chrome.downloads.download({ url: dataUri, filename: 'upwork-jobs.csv', saveAs: false });
+
+  return { success: true, count: lastScrapedJobs.length };
 }
 
 // ─── Message router ───────────────────────────────────────────────────────────
@@ -113,6 +162,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   //        or { success: false, error: '...', statuses: {} }
   if (message.action === 'GET_MATCH_STATUS') {
     handleMatchStatus(message).then(sendResponse);
+    return true; // keep port open for async response
+  }
+
+  // Export scraped jobs as a CSV file downloaded to the user's downloads folder
+  // Message format: { action: 'EXPORT_CSV' }
+  // Response: { success: true, count: N } | { success: false, reason: 'csv_disabled'|'no_data', message: '...' }
+  if (message.action === 'EXPORT_CSV') {
+    handleExportCsv(message).then(sendResponse);
     return true; // keep port open for async response
   }
 
