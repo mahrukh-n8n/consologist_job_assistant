@@ -447,24 +447,79 @@ function initSearchPage() {
   });
 }
 
+// ── Detail page: inject "Scrape Job" button (INJC-02) ────────────────────
+
+/**
+ * Injects a green "Scrape Job" button near the job title on detail pages.
+ * On click, calls scrapeDetailPage() and sends PUSH_JOBS to the service worker.
+ * Shows transient "Sent!" or "Failed" feedback, then resets after 2s.
+ * Safe to call multiple times — exits early if button already present.
+ */
+function initDetailPage() {
+  // Confirm we're on a job detail page via URL pattern
+  const urlMatch = location.pathname.match(/\/jobs\/~([a-z0-9]+)/i);
+  if (!urlMatch) return;
+
+  // Prevent duplicate injection on SPA re-runs
+  if (document.getElementById('upwork-ext-scrape-btn')) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'upwork-ext-scrape-btn';
+  btn.textContent = 'Scrape Job';
+  btn.style.cssText = 'background:#14a800;color:white;padding:8px 16px;border:none;border-radius:4px;cursor:pointer;font-size:14px;margin-top:8px;display:block;';
+
+  btn.addEventListener('click', () => {
+    const jobData = scrapeDetailPage();
+    if (!jobData) {
+      console.warn('[upwork-ext] initDetailPage: detail scrape returned nothing');
+      return;
+    }
+    chrome.runtime.sendMessage({ action: 'PUSH_JOBS', jobs: [jobData] }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn('[upwork-ext] PUSH_JOBS error:', chrome.runtime.lastError.message);
+        btn.textContent = 'Failed';
+        setTimeout(() => { btn.textContent = 'Scrape Job'; }, 2000);
+        return;
+      }
+      btn.textContent = response?.success ? 'Sent!' : 'Failed';
+      setTimeout(() => { btn.textContent = 'Scrape Job'; }, 2000);
+    });
+  });
+
+  // Inject after h1 if present, otherwise prepend to body as fallback
+  const h1 = document.querySelector('h1');
+  if (h1) {
+    h1.insertAdjacentElement('afterend', btn);
+  } else {
+    document.body.prepend(btn);
+  }
+
+  console.debug('[upwork-ext] initDetailPage: Scrape Job button injected for job', urlMatch[1]);
+}
+
 // ── SPA navigation router ─────────────────────────────────────────────────
 
 /**
  * Routes the current page to the appropriate init function.
  * Called on initial load and on every SPA URL change detected by the observer.
- * Detail page init (initDetailPage) will be added in Task 2 (INJC-02).
  */
 function routePage() {
   const path = location.pathname;
   const search = location.search;
 
-  // Search results: /nx/search/jobs or /search?... with query params
+  // Detail page: /jobs/~<id> — check first (more specific match)
+  const isDetailPage = /\/jobs\/~[a-z0-9]+/i.test(path);
+
+  // Search results: /nx/search/jobs or path with /search
   const isSearchPage = (
     path.includes('/search') ||
-    (path.includes('/jobs') && !path.match(/\/jobs\/~[a-z0-9]+/i))
+    (path.includes('/jobs') && !isDetailPage)
   ) && (search.includes('q=') || path.includes('/search'));
 
-  if (isSearchPage) {
+  if (isDetailPage) {
+    // Wait briefly for SPA content to render before injecting button
+    setTimeout(initDetailPage, 500);
+  } else if (isSearchPage) {
     // Wait for job cards to render in the SPA
     setTimeout(initSearchPage, 1500);
   }
