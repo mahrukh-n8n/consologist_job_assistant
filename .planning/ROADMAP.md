@@ -45,12 +45,13 @@ Plans:
   2. On a job detail page, the extension extracts description, budget, skills, experience level, duration, posted date, proposals count, and full client info
   3. All extracted field names match the reference project exactly (case-sensitive): job_id, title, url, description, budget, payment_type, skills, experience_level, project_duration, posted_date, proposals_count, client_payment_verified, client_location, client_rating, client_total_spent
   4. Extension runs a background scrape automatically at the user-configured interval without the popup being open
-**Plans**: TBD
+**Plans**: 4 plans (3 original + 1 gap closure)
 
 Plans:
 - [x] 02-01: Search page scraper — content script that extracts job list data (IDs, titles, URLs) from search result DOM
 - [x] 02-02: Detail page scraper — content script that extracts full job fields from job detail page DOM
-- [ ] 02-03: Scheduled scraping — service worker with chrome.alarms wired to trigger scrape at configured interval
+- [x] 02-03: Scheduled scraping — service worker with chrome.alarms wired to trigger scrape at configured interval
+- [ ] 02-04: Gap closure — popup scrape button (SCRP-03) and detail scraper wiring into content script (SCRP-02)
 
 ### Phase 3: Webhook Integration and Search Overlay
 **Goal**: Scraped job data reaches n8n and the user sees color-coded match icons on search results without leaving Upwork; scraped data can also be saved as a CSV file
@@ -93,6 +94,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 2/2 | Complete | 2026-02-18 |
-| 2. Scraping Engine | 3/3 | Complete   | 2026-02-18 |
+| 2. Scraping Engine | 3/4 | Gap closure in progress | 2026-02-18 |
 | 3. Webhook Integration and Search Overlay | 0/3 | Not started | - |
 | 4. Proposal Workflow and Notifications | 0/2 | Not started | - |
