@@ -4,6 +4,7 @@
 // Adapts: EnvironmentAdapter message-passing pattern via chrome.runtime.onMessage
 
 import { WebhookClient } from '../utils/webhook-client.js';
+import { transformJob } from '../utils/job-transformer.js';
 
 console.log('[SW] Consologit_Job_Assistant service worker started');
 
@@ -84,12 +85,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
 
+      // Transform to reference schema before dispatch
+      const transformedJobs = message.jobs.map(transformJob).filter(Boolean);
+
       // Dispatch each job via WebhookClient
       const client = new WebhookClient();
       let sent = 0;
       let failed = 0;
 
-      for (const job of message.jobs) {
+      for (const job of transformedJobs) {
         const ok = await client.dispatchJob(webhookUrl, job);
         if (ok) {
           sent++;
