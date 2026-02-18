@@ -96,14 +96,18 @@ async function triggerScrape() {
     // Send scrapeSearch to the content script on the active tab
     const response = await chrome.tabs.sendMessage(tab.id, { action: 'scrapeSearch' });
     if (response && Array.isArray(response.jobs)) {
-      showScrapeStatus(`Scraped ${response.jobs.length} job${response.jobs.length !== 1 ? 's' : ''}`);
+      const msg = `Scraped ${response.jobs.length} job${response.jobs.length !== 1 ? 's' : ''}`;
+      showScrapeStatus(msg);
+      showExtStatus(msg, 'success');
     } else {
       showScrapeStatus('Scrape returned no data', true);
+      showExtStatus('Scrape returned no data', 'error');
     }
   } catch (err) {
     // Safe-fail: content script may not be injected on non-Upwork tabs
     console.error('[Popup] Scrape failed:', err);
     showScrapeStatus('Scrape failed — open an Upwork search page', true);
+    showExtStatus('Scrape failed — open an Upwork search page', 'error');
   }
 }
 

@@ -300,6 +300,7 @@ async function runScheduledScrape() {
       lastScrapedJobs: jobs,
       lastScrapeTime: new Date().toISOString(),
     });
+    await fireNotification('scrapeComplete', `Scraped ${jobs.length} jobs from search`);
   }
 }
 
