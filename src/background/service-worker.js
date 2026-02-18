@@ -115,14 +115,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       // Read webhook settings from storage
-      const { webhookUrl, outputMode } = await chrome.storage.local.get({
+      const { webhookUrl, outputFormat } = await chrome.storage.local.get({
         webhookUrl: '',
-        outputMode: 'webhook',
+        outputFormat: 'webhook',
       });
 
-      // Guard: skip if outputMode is csv-only
-      if (outputMode === 'csv') {
-        console.log('WebhookClient: skipping webhook push, outputMode is csv-only');
+      // Guard: skip if outputFormat is csv-only
+      if (outputFormat === 'csv') {
+        console.log('WebhookClient: skipping webhook push, outputFormat is csv-only');
         sendResponse({ success: false, skipped: true });
         return;
       }
@@ -252,7 +252,7 @@ async function runScheduledScrape() {
   // Store results for popup display and downstream phases
   if (jobs.length > 0) {
     await chrome.storage.local.set({
-      lastScrapeJobs: jobs,
+      lastScrapedJobs: jobs,
       lastScrapeTime: new Date().toISOString(),
     });
   }
