@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-17)
 
 **Core value:** Instantly see which Upwork jobs match your criteria and have proposal-ready workflows — without leaving the Upwork page.
-**Current focus:** Phase 3 — Webhook Integration, Search Overlay, and CSV Export
+**Current focus:** Phase 4 — Proposal Workflow and Notifications
 
 ## Current Position
 
-Phase: 3 of 4 (Webhook Integration, Search Overlay, and CSV Export) — IN PROGRESS
-Plan: 3 of 3 at checkpoint (03-03 CSV export tasks complete; awaiting human verification)
-Status: 03-03 at checkpoint:human-verify — CsvExporter utility, EXPORT_CSV handler, and Export CSV popup button implemented; awaiting human verification
-Last activity: 2026-02-18 — Completed 03-03 CSV export implementation (Tasks 1-2); at checkpoint
+Phase: 4 of 4 (Proposal Workflow and Notifications) — IN PROGRESS
+Plan: 1 of 2 complete (04-01 done; 04-02 next)
+Status: 04-01 complete — ProposalManager utility, LOAD_PROPOSAL service worker handler, manifest injection wiring all done
+Last activity: 2026-02-18 — Completed 04-01 proposal loading (Tasks 1-2, 2 commits)
 
-Progress: [████████░░] 80%
+Progress: [█████████░] 90%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5 (+ 03-03 at checkpoint)
-- Average duration: ~6min
-- Total execution time: ~0.39 hours
+- Total plans completed: 7 (01-01 through 03-03 + 04-01)
+- Average duration: ~7min
+- Total execution time: ~0.47 hours
 
 **By Phase:**
 
@@ -29,10 +29,11 @@ Progress: [████████░░] 80%
 |-------|-------|-------|----------|
 | 01-foundation | 2/2 | ~12min | ~6min |
 | 02-scraping-engine | 4/4 | ~28min | ~7min |
-| 03-webhook-integration-search-overlay | 2/3 complete + 03-03 at checkpoint | ~26min | ~9min |
+| 03-webhook-integration-search-overlay | 3/3 | ~26min | ~9min |
+| 04-proposal-workflow-notifications | 1/2 complete | ~12min | ~12min |
 
 **Recent Trend:**
-- Last 5 plans: 02-03 (12min), 02-04 (3min), 03-01 (8min), 03-02 (15min), 03-03 (3min so far)
+- Last 5 plans: 02-04 (3min), 03-01 (8min), 03-02 (15min), 03-03 (3min), 04-01 (12min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -43,6 +44,7 @@ Progress: [████████░░] 80%
 | Phase 03-webhook-integration-search-overlay P01 | 8 | 2 tasks | 2 files |
 | Phase 03-webhook-integration-search-overlay P02 | 15 | 2 tasks | 4 files |
 | Phase 03-webhook-integration-search-overlay P03 | 3 | 2 tasks | 4 files |
+| Phase 04-proposal-workflow-notifications P01 | 12 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -88,19 +90,23 @@ Recent decisions affecting current work:
 - [Phase 03-03]: outputFormat guard checks for 'webhook' specifically — 'both' and 'csv' both permit CSV export
 - [Phase 03-03]: data: URI download pattern used (not Blob/URL.createObjectURL) — MV3 service worker restriction
 - [Phase 03-03]: sendExportCsv() wraps sendMessage in Promise for async/await with chrome.runtime.lastError handling
+- [Phase 04-01]: ProposalManager is a plain object literal, not a class — content scripts load as classic scripts, no ES module exports
+- [Phase 04-01]: proposalWebhookUrl storage key distinct from webhookUrl — separate n8n workflow endpoints; popup must add second URL input field
+- [Phase 04-01]: manifest.json multi-file content_scripts injection: proposal.js before upwork-content.js — MV3 pattern for sharing globals across content script files without ES modules
+- [Phase 04-01]: handleLoadProposal registered with return true in onMessage (not .then) — keeps async channel open per MV3 requirement
+- [Phase 04-01]: cloneNode/replaceChild for paste/copy button re-attachment on panel update — prevents stale closure over old proposalText on subsequent Load Proposal calls
 
 ### Pending Todos
 
-None yet.
+- Popup settings panel must add proposalWebhookUrl input field (documented in handleLoadProposal JSDoc)
 
 ### Blockers/Concerns
 
 - Webhook dependency: n8n must be running for match icons and proposal loading to work during manual testing
-- Field name compatibility: all scraped data keys must be verified against reference project before Phase 3 ships (PUSH_JOBS now wired; manual n8n test recommended before Phase 3 ships)
-- 03-03 checkpoint: CsvExporter uses 44-column reference n8n schema; if job-transformer.js does not populate these fields, the CSV will have mostly empty columns. The stored lastScrapedJobs may need to be the full reference-schema objects (not just the 15 scraper fields). Human verification will confirm.
+- proposalWebhookUrl not yet configurable via popup UI — must be set via DevTools console until 04-02 or a popup plan adds the input
 
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: 03-03-PLAN.md checkpoint:human-verify — CsvExporter utility (44-field reference schema), EXPORT_CSV service worker handler, and Export CSV popup button implemented; awaiting human verification
+Stopped at: 04-01-PLAN.md complete — ProposalManager utility, LOAD_PROPOSAL service worker handler, manifest content_scripts wiring all committed; 04-02 is next
 Resume file: None
