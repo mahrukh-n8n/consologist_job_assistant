@@ -107,6 +107,9 @@ async function fireNotification(type, message) {
   }
 }
 
+// Expose to DevTools console (module scope doesn't attach to self automatically)
+self.fireNotification = fireNotification;
+
 // ─── Message router ───────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('[SW] Message received:', message.action || message.type);
