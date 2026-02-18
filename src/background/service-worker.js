@@ -230,7 +230,7 @@ async function handleMatchStatus(message) {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ job_ids: message.jobIds }),
+      body: JSON.stringify({ job_ids: message.jobIds, statuscheck: true }),
     });
 
     if (!response.ok) {
