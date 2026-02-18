@@ -48,8 +48,8 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 02-01: Search page scraper — content script that extracts job list data (IDs, titles, URLs) from search result DOM
-- [ ] 02-02: Detail page scraper — content script that extracts full job fields from job detail page DOM
+- [x] 02-01: Search page scraper — content script that extracts job list data (IDs, titles, URLs) from search result DOM
+- [x] 02-02: Detail page scraper — content script that extracts full job fields from job detail page DOM
 - [ ] 02-03: Scheduled scraping — service worker with chrome.alarms wired to trigger scrape at configured interval
 
 ### Phase 3: Webhook Integration and Search Overlay
@@ -93,6 +93,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 2/2 | Complete | 2026-02-18 |
-| 2. Scraping Engine | 0/3 | Not started | - |
+| 2. Scraping Engine | 2/3 | In progress | - |
 | 3. Webhook Integration and Search Overlay | 0/3 | Not started | - |
 | 4. Proposal Workflow and Notifications | 0/2 | Not started | - |

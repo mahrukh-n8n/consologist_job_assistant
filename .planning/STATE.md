@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Position
 
 Phase: 2 of 4 (Scraping Engine)
-Plan: 2 of 3 in current phase
+Plan: 3 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-18 — Completed 02-01 search page scraper and URL parser utility
+Last activity: 2026-02-18 — Completed 02-02 detail page scraper (all 15 reference fields)
 
-Progress: [███░░░░░░░] 30%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
@@ -28,10 +28,10 @@ Progress: [███░░░░░░░] 30%
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-foundation | 2/2 | ~12min | ~6min |
-| 02-scraping-engine | 1/3 | ~5min | ~5min |
+| 02-scraping-engine | 2/3 | ~13min | ~6.5min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2min), 01-02 (10min), 02-01 (5min)
+- Last 5 plans: 01-01 (2min), 01-02 (10min), 02-01 (5min), 02-02 (8min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -55,6 +55,9 @@ Recent decisions affecting current work:
 - Master notification toggle uses CSS .disabled class (not disabled attribute) so sub-values are still saved when master is off
 - Cascading selector fallbacks for Upwork job card and title link selectors — insulates scraper against DOM changes
 - Skip cards missing job_id or title (guard-and-continue) — downstream consumers receive clean uniform arrays only
+- firstText() helper pattern for all string fields — single consistent function for selector fallback across 15 detail page fields
+- skills always array ([] default), client_payment_verified always boolean — strict type contracts for n8n/webhook consumers
+- posted_date prefers datetime attribute over visible text — machine-readable ISO format preferred
 
 ### Pending Todos
 
@@ -68,5 +71,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 02-01-PLAN.md — search page scraper and job-parser utility complete, ready for 02-02
+Stopped at: Completed 02-02-PLAN.md — detail page scraper with all 15 reference fields complete, ready for 02-03
 Resume file: None
