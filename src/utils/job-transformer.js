@@ -137,7 +137,7 @@ export function transformJob(raw) {
     clientCompanySize: 0,
     qualifications_regions: 'N/A',
     qualifications_worldRegion: 'N/A',
-    qualifications_country: [],
+    qualifications_country: null,
     minJobSuccessScore: 0,
     englishLevel: 'N/A',
     Title: raw.title || 'N/A',
