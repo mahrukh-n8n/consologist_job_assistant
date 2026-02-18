@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 
 ## Current Position
 
-Phase: 2 of 4 (Scraping Engine) — COMPLETE
-Plan: 4 of 4 completed (phase complete, all gaps closed, ready for Phase 3)
-Status: Phase 2 fully complete — all four requirements (SCRP-01, SCRP-02, SCRP-03, SCRP-04) satisfied
-Last activity: 2026-02-18 — Completed 02-04 popup trigger and detail scraper gap closure
+Phase: 3 of 4 (Webhook Integration, Search Overlay, and CSV Export) — IN PROGRESS
+Plan: 1 of 3 completed (03-01 webhook push module complete)
+Status: 03-01 complete — WebhookClient and PUSH_JOBS handler shipped; ready for 03-02 (search overlay)
+Last activity: 2026-02-18 — Completed 03-01 webhook push module
 
-Progress: [█████░░░░░] 55%
+Progress: [██████░░░░] 60%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: ~5.5min
-- Total execution time: ~0.31 hours
+- Total plans completed: 5
+- Average duration: ~6min
+- Total execution time: ~0.39 hours
 
 **By Phase:**
 
@@ -29,15 +29,18 @@ Progress: [█████░░░░░] 55%
 |-------|-------|-------|----------|
 | 01-foundation | 2/2 | ~12min | ~6min |
 | 02-scraping-engine | 4/4 | ~28min | ~7min |
+| 03-webhook-integration-search-overlay | 1/3 | ~8min | ~8min |
 
 **Recent Trend:**
-- Last 5 plans: 01-02 (10min), 02-01 (5min), 02-02 (8min), 02-03 (12min), 02-04 (3min)
+- Last 5 plans: 02-01 (5min), 02-02 (8min), 02-03 (12min), 02-04 (3min), 03-01 (8min)
 - Trend: Consistent
 
 *Updated after each plan completion*
 
 | Phase 02-scraping-engine P03 | 12 | 2 tasks | 4 files |
 | Phase 02-scraping-engine P04 | 3 | 2 tasks | 3 files |
+| Phase 03-webhook-integration P01 | 8 | 2 tasks | 2 files |
+| Phase 03-webhook-integration-search-overlay P01 | 8 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -67,6 +70,12 @@ Recent decisions affecting current work:
 - [Phase 02-04]: Scrape Now button placed in <main> setting-group, not <footer> — keeps scraping action visually distinct from Save Settings
 - [Phase 02-04]: showScrapeStatus() is a dedicated function, not shared with showStatus() — separate DOM targets, no cross-contamination of status messages
 - [Phase 02-04]: triggerScrape() safe-fail error shows user-friendly message — consistent with popup error pattern
+- [Phase 03-01]: WebhookClient ported as a class (not standalone function) for consistency with global registry and testability
+- [Phase 03-01]: PUSH_JOBS handler uses IIFE async block inside synchronous onMessage listener — required MV3 pattern for await with sendResponse
+- [Phase 03-01]: outputMode default in storage.get() defaults to 'webhook' — webhook fires unless user explicitly selects csv-only
+- [Phase 03-01]: Job objects pass through WebhookClient untransformed — field name contract enforced by Phase 2 scraper, not WebhookClient (single responsibility)
+- [Phase 03-webhook-integration-search-overlay]: WebhookClient ported as class for consistency with global registry
+- [Phase 03-webhook-integration-search-overlay]: PUSH_JOBS handler uses IIFE async block inside onMessage — required MV3 pattern for await with sendResponse
 
 ### Pending Todos
 
@@ -75,10 +84,10 @@ None yet.
 ### Blockers/Concerns
 
 - Webhook dependency: n8n must be running for match icons and proposal loading to work during manual testing
-- Field name compatibility: all scraped data keys must be verified against reference project before Phase 3 ships
+- Field name compatibility: all scraped data keys must be verified against reference project before Phase 3 ships (PUSH_JOBS now wired; manual n8n test recommended before Phase 3 ships)
 
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 02-04-PLAN.md — popup trigger and detail scraper wired, Phase 2 fully complete (SCRP-01 through SCRP-04 satisfied), ready for Phase 3
+Stopped at: Completed 03-01-PLAN.md — WebhookClient utility and PUSH_JOBS handler wired in service worker, WEHK-01 closed
 Resume file: None
