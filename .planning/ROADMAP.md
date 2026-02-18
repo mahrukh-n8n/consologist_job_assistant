@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation** - Installable extension with settings UI and all required permissions wired up
 - [x] **Phase 2: Scraping Engine** - DOM scraping works on search and detail pages, on-demand and on schedule (completed 2026-02-18)
 - [x] **Phase 3: Webhook Integration and Search Overlay** - Job data flows to n8n, match icons appear, CSV export works (completed 2026-02-18)
-- [ ] **Phase 4: Proposal Workflow and Notifications** - Proposals load on detail pages, paste and clipboard work, notifications fire
+- [x] **Phase 4: Proposal Workflow and Notifications** - Proposals load on detail pages, paste and clipboard work, notifications fire (completed 2026-02-18)
 
 ## Phase Details
 
@@ -84,7 +84,7 @@ Plans:
 
 Plans:
 - [x] 04-01: Proposal loading — content script on apply pages adds Load Proposal button, fetches from n8n, renders result with Paste and Copy actions
-- [ ] 04-02: Notifications and status — service worker fires chrome.notifications for scrape summaries; popup shows inline status messages for webhook and proposal actions
+- [x] 04-02: Notifications and status — service worker fires chrome.notifications for scrape summaries; popup shows inline status messages for webhook and proposal actions
 
 ## Progress
 
@@ -96,4 +96,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. Foundation | 2/2 | Complete | 2026-02-18 |
 | 2. Scraping Engine | 4/4 | Complete | 2026-02-18 |
 | 3. Webhook Integration and Search Overlay | 3/3 | Complete | 2026-02-18 |
-| 4. Proposal Workflow and Notifications | 1/2 | In Progress | - |
+| 4. Proposal Workflow and Notifications | 2/2 | Complete | 2026-02-18 |
