@@ -84,13 +84,24 @@ function scrapeDetailPage() {
   const pageUrl = window.location.href;
   const job_id = extractJobId(pageUrl);
 
-  // title — Upwork renders in span.text-base.flex-1, not h1
-  const title = firstText([
-    'span.text-base.flex-1',
-    '[data-test="job-title"] h1',
-    'h1.job-title',
-    'h1',
-  ]);
+  // title — search first card section for the largest short span (no h1 on Upwork)
+  let title = null;
+  const firstCard = document.querySelector('.air3-card-section');
+  if (firstCard) {
+    for (const span of firstCard.querySelectorAll('span')) {
+      const t = span.textContent.trim();
+      if (t.length > 10 && t.length < 300 && !t.includes('ago') && !t.includes('Posted') && !t.includes('profile')) {
+        title = t;
+        break;
+      }
+    }
+  }
+  // Fallback: strip site suffix from document.title ("Job Title - Upwork")
+  if (!title && document.title) {
+    const parts = document.title.split(' - ');
+    if (parts.length > 1) parts.pop();
+    title = parts.join(' - ').trim() || null;
+  }
 
   // description — air3-card-section containing "Summary" heading
   let description = null;
@@ -145,13 +156,15 @@ function scrapeDetailPage() {
     }
   }
 
-  // experience_level — strong inside .features.list-unstyled.m-0
-  const experience_level = firstText([
-    '.features.list-unstyled.m-0 strong',
-    '[data-test="experience-level"]',
-    '.experience-level',
-    '[data-test="contractor-tier"]',
-  ]);
+  // experience_level — match known Upwork values in any strong element
+  let experience_level = null;
+  const expLevels = ['Entry Level', 'Intermediate', 'Expert'];
+  for (const strong of document.querySelectorAll('strong')) {
+    if (expLevels.includes(strong.textContent.trim())) {
+      experience_level = strong.textContent.trim();
+      break;
+    }
+  }
 
   // project_duration — .segmentations contains "Project Type: Ongoing project"
   let project_duration = null;
