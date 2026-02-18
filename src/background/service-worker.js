@@ -97,7 +97,7 @@ async function fireNotification(type, message) {
     if (!settings[`notifications.${type}`]) return;
     chrome.notifications.create('ext-notif-' + Date.now(), {
       type: 'basic',
-      iconUrl: chrome.runtime.getURL('icons/icon48.svg'),
+      iconUrl: chrome.runtime.getURL('icons/icon48.png'),
       title: 'Consologit_Job_Assistant',
       message
     });
