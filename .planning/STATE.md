@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Position
 
 Phase: 4 of 4 (Proposal Workflow and Notifications) — IN PROGRESS
-Plan: 1 of 2 complete (04-01 done; 04-02 next)
-Status: 04-01 complete — ProposalManager utility, LOAD_PROPOSAL service worker handler, manifest injection wiring all done
-Last activity: 2026-02-18 — Completed 04-01 proposal loading (Tasks 1-2, 2 commits)
+Plan: 2 of 2 (04-02 tasks 1-2 complete; awaiting checkpoint:human-verify at Task 3)
+Status: 04-02 tasks 1-2 committed — fireNotification helper wired, #ext-status popup display added; checkpoint pending human verification
+Last activity: 2026-02-18 — Completed 04-02 Tasks 1-2 (2 commits: 6e721e0, 10344e7)
 
 Progress: [█████████░] 90%
 
@@ -95,6 +95,10 @@ Recent decisions affecting current work:
 - [Phase 04-01]: manifest.json multi-file content_scripts injection: proposal.js before upwork-content.js — MV3 pattern for sharing globals across content script files without ES modules
 - [Phase 04-01]: handleLoadProposal registered with return true in onMessage (not .then) — keeps async channel open per MV3 requirement
 - [Phase 04-01]: cloneNode/replaceChild for paste/copy button re-attachment on panel update — prevents stale closure over old proposalText on subsequent Load Proposal calls
+- [Phase 04-02]: fireNotification safe-fail try/catch — notification failures never crash the service worker; returns silently on error
+- [Phase 04-02]: extStatusTimer as module-level let — allows cancellable auto-clear across multiple rapid showExtStatus calls
+- [Phase 04-02]: EXPORT_CSV handler converted from .then(sendResponse) to async then-callback — needed to await fireNotification inside the callback
+- [Phase 04-02]: showExtStatus uses direct document.getElementById (not els ref) — avoids stale DOM reference risk; null-guard if (!el) makes it safe
 
 ### Pending Todos
 
@@ -108,5 +112,5 @@ Recent decisions affecting current work:
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: 04-01-PLAN.md complete — ProposalManager utility, LOAD_PROPOSAL service worker handler, manifest content_scripts wiring all committed; 04-02 is next
+Stopped at: 04-02-PLAN.md Tasks 1-2 complete — fireNotification helper + popup #ext-status display committed; paused at Task 3 checkpoint:human-verify
 Resume file: None
