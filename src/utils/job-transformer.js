@@ -87,10 +87,10 @@ export function transformJob(raw) {
     return { country: parts[0] || 'N/A', city: 'N/A' };
   }
 
-  /** Return ISO timestamp string if str looks like one, otherwise null. */
-  function isoOrNull(str) {
-    if (!str) return null;
-    return String(str).includes('T') ? str : null;
+  /** Return ISO timestamp string if str looks like one, otherwise today's date. */
+  function isoOrToday(str) {
+    if (str && String(str).includes('T')) return str;
+    return new Date().toISOString();
   }
 
   // ── Derive values ────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ export function transformJob(raw) {
   return {
     category: 'N/A',
     subcategory: 'N/A',
-    postedAt: isoOrNull(raw.posted_date),
+    postedAt: isoOrToday(raw.posted_date),
     publishTime: null,
     createTime: null,
     lastActivity: null,
