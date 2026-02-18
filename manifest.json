@@ -13,7 +13,8 @@
   ],
 
   "host_permissions": [
-    "*://*.upwork.com/*"
+    "*://*.upwork.com/*",
+    "https://*/*"
   ],
 
   "background": {
