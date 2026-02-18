@@ -350,8 +350,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  *   applied  → #3b82f6 (blue)
  */
 function initSearchPage() {
-  // Reuse the existing scrapeSearchPage() card/link discovery logic to find
-  // cards and their anchors, then map job_id → anchor element.
   const cardSelectors = [
     '[data-test="job-tile"]',
     'section.air3-card-section',
@@ -365,48 +363,52 @@ function initSearchPage() {
     'a[href*="/jobs/"]',
   ];
 
-  let cards = [];
-  for (const sel of cardSelectors) {
-    const found = document.querySelectorAll(sel);
-    if (found.length > 0) {
-      cards = Array.from(found);
-      break;
+  // Retry up to 5 times every 800ms — handles slow/variable SPA render times.
+  let attempt = 0;
+  const MAX_ATTEMPTS = 5;
+  const RETRY_MS = 800;
+
+  function tryFindCards() {
+    attempt++;
+    let cards = [];
+    for (const sel of cardSelectors) {
+      const found = document.querySelectorAll(sel);
+      if (found.length > 0) { cards = Array.from(found); break; }
     }
-  }
 
-  if (cards.length === 0) {
-    console.log('[upwork-ext] initSearchPage: no job cards found');
-    return;
-  }
-
-  // Build a map of job_id -> title anchor element
-  const jobIdToAnchor = new Map();
-  for (const card of cards) {
-    let anchor = null;
-    for (const sel of linkSelectors) {
-      anchor = card.querySelector(sel);
-      if (anchor) break;
+    if (cards.length === 0) {
+      if (attempt < MAX_ATTEMPTS) {
+        console.debug('[upwork-ext] initSearchPage: no cards yet, retry', attempt, '/', MAX_ATTEMPTS);
+        setTimeout(tryFindCards, RETRY_MS);
+      } else {
+        console.log('[upwork-ext] initSearchPage: no job cards found after', MAX_ATTEMPTS, 'attempts');
+      }
+      return;
     }
-    if (!anchor) continue;
 
-    const href = anchor.getAttribute('href') || '';
-    const absoluteUrl = href.startsWith('http')
-      ? href
-      : `https://www.upwork.com${href}`;
+    // Build map of job_id → anchor element
+    const jobIdToAnchor = new Map();
+    for (const card of cards) {
+      let anchor = null;
+      for (const sel of linkSelectors) {
+        anchor = card.querySelector(sel);
+        if (anchor) break;
+      }
+      if (!anchor) continue;
+      const href = anchor.getAttribute('href') || '';
+      const absoluteUrl = href.startsWith('http') ? href : `https://www.upwork.com${href}`;
+      const job_id = extractJobId(absoluteUrl);
+      if (!job_id) continue;
+      jobIdToAnchor.set(job_id, anchor);
+    }
 
-    const job_id = extractJobId(absoluteUrl);
-    if (!job_id) continue;
+    const jobIds = Array.from(jobIdToAnchor.keys());
+    if (jobIds.length === 0) {
+      console.log('[upwork-ext] initSearchPage: cards found but no job IDs extracted');
+      return;
+    }
 
-    jobIdToAnchor.set(job_id, anchor);
-  }
-
-  const jobIds = Array.from(jobIdToAnchor.keys());
-  if (jobIds.length === 0) {
-    console.log('[upwork-ext] initSearchPage: no job IDs found on search page');
-    return;
-  }
-
-  console.debug('[upwork-ext] initSearchPage: requesting match status for', jobIds.length, 'jobs');
+    console.debug('[upwork-ext] initSearchPage: attempt', attempt, '— requesting match status for', jobIds.length, 'jobs');
 
   chrome.runtime.sendMessage({ action: 'GET_MATCH_STATUS', jobIds }, (response) => {
     if (chrome.runtime.lastError) {
@@ -444,7 +446,10 @@ function initSearchPage() {
     }
 
     console.debug('[upwork-ext] initSearchPage: icons injected for', Object.keys(response.statuses).length, 'statuses');
-  });
+    });
+  }
+
+  tryFindCards();
 }
 
 // ── Detail page: inject "Scrape Job" button (INJC-02) ────────────────────
@@ -520,8 +525,8 @@ function routePage() {
     // Wait briefly for SPA content to render before injecting button
     setTimeout(initDetailPage, 500);
   } else if (isSearchPage) {
-    // Wait for job cards to render in the SPA
-    setTimeout(initSearchPage, 1500);
+    // initSearchPage retries internally every 800ms — no outer delay needed
+    initSearchPage();
   }
 }
 
