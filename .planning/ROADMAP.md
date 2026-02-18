@@ -66,8 +66,8 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 03-01: Webhook push — service worker sends scraped payload to configured n8n URL; handles response and routes match/applied status back to content script
-- [ ] 03-02: Search page icon overlay — content script injects green/red/blue status icons on job cards based on webhook response
+- [x] 03-01: Webhook push — service worker sends scraped payload to configured n8n URL; handles response and routes match/applied status back to content script
+- [x] 03-02: Search page icon overlay — content script injects green/red/blue status icons on job cards based on webhook response (at human-verify checkpoint)
 - [ ] 03-03: CSV export — generates CSV with reference-matching headers and triggers chrome.downloads to save to downloads folder
 
 ### Phase 4: Proposal Workflow and Notifications
@@ -95,5 +95,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Foundation | 2/2 | Complete | 2026-02-18 |
 | 2. Scraping Engine | 4/4 | Complete | 2026-02-18 |
-| 3. Webhook Integration and Search Overlay | 1/3 | In Progress|  |
+| 3. Webhook Integration and Search Overlay | 2/3 | In Progress (checkpoint)|  |
 | 4. Proposal Workflow and Notifications | 0/2 | Not started | - |

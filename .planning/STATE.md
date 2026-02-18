@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-17)
 ## Current Position
 
 Phase: 3 of 4 (Webhook Integration, Search Overlay, and CSV Export) — IN PROGRESS
-Plan: 1 of 3 completed (03-01 webhook push module complete)
-Status: 03-01 complete — WebhookClient and PUSH_JOBS handler shipped; ready for 03-02 (search overlay)
-Last activity: 2026-02-18 — Completed 03-01 webhook push module
+Plan: 2 of 3 completed (03-02 search overlay + scrape button at human-verify checkpoint)
+Status: 03-02 at checkpoint — INJC-01 icons and INJC-02 scrape button implemented; awaiting human verification before proceeding to 03-03 (CSV export)
+Last activity: 2026-02-18 — Completed 03-02 search overlay and detail page scrape button implementation
 
-Progress: [██████░░░░] 60%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
@@ -29,10 +29,10 @@ Progress: [██████░░░░] 60%
 |-------|-------|-------|----------|
 | 01-foundation | 2/2 | ~12min | ~6min |
 | 02-scraping-engine | 4/4 | ~28min | ~7min |
-| 03-webhook-integration-search-overlay | 1/3 | ~8min | ~8min |
+| 03-webhook-integration-search-overlay | 2/3 | ~23min | ~11min |
 
 **Recent Trend:**
-- Last 5 plans: 02-01 (5min), 02-02 (8min), 02-03 (12min), 02-04 (3min), 03-01 (8min)
+- Last 5 plans: 02-02 (8min), 02-03 (12min), 02-04 (3min), 03-01 (8min), 03-02 (15min)
 - Trend: Consistent
 
 *Updated after each plan completion*
@@ -41,6 +41,7 @@ Progress: [██████░░░░] 60%
 | Phase 02-scraping-engine P04 | 3 | 2 tasks | 3 files |
 | Phase 03-webhook-integration P01 | 8 | 2 tasks | 2 files |
 | Phase 03-webhook-integration-search-overlay P01 | 8 | 2 tasks | 2 files |
+| Phase 03-webhook-integration-search-overlay P02 | 15 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,12 @@ Recent decisions affecting current work:
 - [Phase 03-01]: Job objects pass through WebhookClient untransformed — field name contract enforced by Phase 2 scraper, not WebhookClient (single responsibility)
 - [Phase 03-webhook-integration-search-overlay]: WebhookClient ported as class for consistency with global registry
 - [Phase 03-webhook-integration-search-overlay]: PUSH_JOBS handler uses IIFE async block inside onMessage — required MV3 pattern for await with sendResponse
+- [Phase 03-02]: GET_MATCH_STATUS posts to same webhookUrl as PUSH_JOBS with statuscheck:true flag — n8n routes via this flag, avoids second settings field
+- [Phase 03-02]: SPA observer tracks full location.href (not pathname) — search-to-search navigation changes ?q= but not path
+- [Phase 03-02]: initSearchPage() retries card detection up to 5x at 800ms — Upwork SPA render timing is variable
+- [Phase 03-02]: Initial search page delay set to 5s for first SPA render after cold page load
+- [Phase 03-02]: job-transformer.js maps Phase 2 scraper fields to reference n8n schema — applied before WebhookClient dispatch in service worker
+- [Phase 03-02]: postedAt defaults to today's ISO date when posted_date missing — downstream n8n expects a date string always
 
 ### Pending Todos
 
@@ -89,5 +96,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-18
-Stopped at: Completed 03-01-PLAN.md — WebhookClient utility and PUSH_JOBS handler wired in service worker, WEHK-01 closed
+Stopped at: 03-02-PLAN.md checkpoint:human-verify — INJC-01 search overlay icons and INJC-02 detail page scrape button implemented; awaiting human verification before 03-03
 Resume file: None
