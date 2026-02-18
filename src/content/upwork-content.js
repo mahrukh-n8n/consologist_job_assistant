@@ -4,6 +4,7 @@
 // Communicates with: service worker via chrome.runtime.sendMessage
 
 import { scrapeSearchPage } from './search-scraper.js';
+import { scrapeDetailPage } from './detail-scraper.js';
 
 console.log('[Content] Upwork Job Scraper content script loaded on:', window.location.href);
 
@@ -20,6 +21,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'scrapeSearch') {
     const jobs = scrapeSearchPage();
     sendResponse({ jobs });
+    return true;
+  }
+
+  // Triggered by popup or service worker to scrape the current job detail page
+  if (message.action === 'scrapeDetail') {
+    const job = scrapeDetailPage();
+    sendResponse({ job });
     return true;
   }
 
