@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Upwork Job Scraper</title>
+  <title>Consologit_Job_Assistant</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div id="app">
     <header>
-      <h1>Upwork Job Scraper</h1>
+      <h1>Consologit_Job_Assistant</h1>
     </header>
 
     <main>
@@ -40,8 +40,8 @@
 
       <!-- SETT-03: Output format -->
       <section class="setting-group">
-        <span class="label">Output Format</span>
-        <div class="radio-group">
+        <span class="label" id="output-format-label">Output Format</span>
+        <div class="radio-group" role="group" aria-labelledby="output-format-label">
           <label class="radio-label">
             <input type="radio" name="outputFormat" value="webhook"> Webhook only
           </label>
@@ -56,14 +56,14 @@
 
       <!-- SETT-04: Notification toggles -->
       <section class="setting-group">
-        <span class="label">Notifications</span>
+        <span class="label" id="notif-label">Notifications</span>
         <div class="toggle-row master-toggle-row">
-          <label class="toggle-label" for="notif-master">
+          <label class="toggle-label">
             <input type="checkbox" id="notif-master" name="notifMaster" checked>
             Enable notifications
           </label>
         </div>
-        <div id="notif-subtypes" class="notif-subtypes">
+        <div id="notif-subtypes" class="notif-subtypes" role="group" aria-labelledby="notif-label">
           <label class="toggle-label sub">
             <input type="checkbox" id="notif-scrape-complete" name="notifScrapeComplete" checked>
             Scrape complete
