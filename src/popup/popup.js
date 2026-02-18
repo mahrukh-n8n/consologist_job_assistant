@@ -32,6 +32,7 @@ const els = {
   saveStatus:          () => document.getElementById('save-status'),
   scrapeBtn:           () => document.getElementById('scrape-btn'),
   scrapeStatus:        () => document.getElementById('scrape-status'),
+  exportCsvBtn:        () => document.getElementById('export-csv-btn'),
 };
 
 // ─── Status display ───────────────────────────────────────────────────────────
@@ -82,6 +83,40 @@ async function triggerScrape() {
     // Safe-fail: content script may not be injected on non-Upwork tabs
     console.error('[Popup] Scrape failed:', err);
     showScrapeStatus('Scrape failed — open an Upwork search page', true);
+  }
+}
+
+// ─── CSV export trigger ───────────────────────────────────────────────────────
+async function sendExportCsv() {
+  const btn = els.exportCsvBtn();
+  btn.disabled = true;
+  btn.textContent = 'Exporting...';
+  try {
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ action: 'EXPORT_CSV' }, (res) => {
+        if (chrome.runtime.lastError) {
+          resolve({ success: false, message: chrome.runtime.lastError.message });
+        } else {
+          resolve(res);
+        }
+      });
+    });
+
+    if (response?.success) {
+      showStatus('Exported ' + (response.count ?? '') + ' jobs');
+    } else if (response?.reason === 'csv_disabled') {
+      showStatus('CSV export is off — change Output Format to CSV or Both', true);
+    } else if (response?.reason === 'no_data') {
+      showStatus('No data to export — run a scrape first', true);
+    } else {
+      showStatus(response?.message ?? 'Export failed', true);
+    }
+  } catch (err) {
+    console.error('[Popup] Export CSV error:', err);
+    showStatus('Export failed', true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Export CSV';
   }
 }
 
@@ -189,6 +224,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Save button
   els.saveBtn().addEventListener('click', saveSettings);
+
+  // Export CSV button
+  els.exportCsvBtn().addEventListener('click', sendExportCsv);
 
   // Scrape Now button
   els.scrapeBtn().addEventListener('click', triggerScrape);
