@@ -117,6 +117,17 @@ async function saveSettings() {
 
     await chrome.storage.local.set(settings);
 
+    // Notify service worker to re-register alarm with the new interval
+    try {
+      await chrome.runtime.sendMessage({
+        action: 'updateAlarm',
+        intervalMinutes: settings.scheduleInterval,
+      });
+    } catch (err) {
+      // Safe-fail: alarm update failure does not block save confirmation
+      console.warn('[Popup] Failed to update alarm in service worker:', err);
+    }
+
     console.log('[Popup] Settings saved:', settings);
     showStatus('Saved');
 
