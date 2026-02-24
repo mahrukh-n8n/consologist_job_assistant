@@ -19,7 +19,7 @@ const ProposalManager = {
    */
   isApplyPage() {
     try {
-      return /\/jobs\/[^/]+\/apply/.test(window.location.href);
+      return /\/nx\/proposals\/job\/[^/]+\/apply/.test(window.location.href);
     } catch (err) {
       console.error('[ProposalManager] isApplyPage error:', err);
       return false;
@@ -36,9 +36,10 @@ const ProposalManager = {
    */
   getJobContext() {
     try {
-      // job_id — second path segment after /jobs/
-      const pathMatch = window.location.pathname.match(/\/jobs\/([^/]+)\//);
-      const job_id = pathMatch ? pathMatch[1] : null;
+      // job_id — extract the numeric ID after the ~ sigil in the URL
+      // Handles /nx/proposals/job/~022024701216023723954/apply/ and /jobs/~<id>
+      const idMatch = window.location.href.match(/[/_]~([a-zA-Z0-9]+)/);
+      const job_id = idMatch ? idMatch[1] : null;
 
       // title — strip " | Upwork" (or " - Upwork") suffix from document.title
       let title = document.title || null;
@@ -76,7 +77,8 @@ const ProposalManager = {
       // Find the cover letter textarea
       const textarea = document.querySelector('[data-test="cover-letter-text"]')
         || document.querySelector('[name="cover_letter"]')
-        || document.querySelector('[data-test="cover-letter-section"] textarea');
+        || document.querySelector('[data-test="cover-letter-section"] textarea')
+        || document.querySelector('textarea');
 
       if (!textarea) {
         console.debug('[ProposalManager] injectButton: cover letter textarea not found');
@@ -108,8 +110,30 @@ const ProposalManager = {
 
       wrapper.appendChild(btn);
 
-      // Insert wrapper immediately before the textarea
-      textarea.parentNode.insertBefore(wrapper, textarea);
+      // Inject after the "Cover Letter" label/heading if one exists,
+      // otherwise fall back to immediately before the textarea.
+      let injected = false;
+      const labelCandidates = document.querySelectorAll('label, h1, h2, h3, h4, h5, legend');
+      for (const el of labelCandidates) {
+        if (/cover letter/i.test(el.textContent.trim())) {
+          el.insertAdjacentElement('afterend', wrapper);
+          injected = true;
+          break;
+        }
+      }
+      if (!injected) {
+        // Fallback: look for a span whose sole text is "Cover Letter"
+        for (const el of document.querySelectorAll('span')) {
+          if (el.children.length === 0 && /^cover letter$/i.test(el.textContent.trim())) {
+            el.insertAdjacentElement('afterend', wrapper);
+            injected = true;
+            break;
+          }
+        }
+      }
+      if (!injected) {
+        textarea.parentNode.insertBefore(wrapper, textarea);
+      }
 
       console.debug('[ProposalManager] injectButton: button injected');
     } catch (err) {

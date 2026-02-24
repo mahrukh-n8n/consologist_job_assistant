@@ -454,52 +454,148 @@ function initSearchPage() {
 
 // ── Detail page: inject "Scrape Job" button (INJC-02) ────────────────────
 
+function ensureSpinnerStyle() {
+  if (document.getElementById('upwork-ext-spinner-style')) return;
+  const style = document.createElement('style');
+  style.id = 'upwork-ext-spinner-style';
+  style.textContent = [
+    '@keyframes upwork-ext-spin { to { transform: rotate(360deg); } }',
+    '.upwork-ext-spinner {',
+    '  display:inline-block; width:11px; height:11px;',
+    '  border:2px solid rgba(255,255,255,0.35); border-top-color:#fff;',
+    '  border-radius:50%; animation:upwork-ext-spin 0.65s linear infinite;',
+    '  vertical-align:middle; margin-right:5px;',
+    '}',
+  ].join('');
+  document.head.appendChild(style);
+}
+
 /**
- * Injects a green "Scrape Job" button near the job title on detail pages.
- * On click, calls scrapeDetailPage() and sends PUSH_JOBS to the service worker.
- * Shows transient "Sent!" or "Failed" feedback, then resets after 2s.
+ * Injects a green "Scrape Job" button near the "Posted X ago" text on detail pages.
+ * Disables itself with a spinner while the webhook POST is in flight.
  * Safe to call multiple times — exits early if button already present.
  */
 function initDetailPage() {
   // Confirm we're on a job detail page via URL pattern
-  const urlMatch = location.pathname.match(/\/jobs\/~([a-z0-9]+)/i);
+  // Handles: /jobs/~<id>  (old) and /jobs/<slug>_~<id>/  (current Upwork format)
+  const urlMatch = location.pathname.match(/\/jobs\/[^/?]*~([a-z0-9]+)/i);
   if (!urlMatch) return;
 
   // Prevent duplicate injection on SPA re-runs
   if (document.getElementById('upwork-ext-scrape-btn')) return;
 
+  ensureSpinnerStyle();
+
+  // Build button structure: [spinner] [label]
   const btn = document.createElement('button');
   btn.id = 'upwork-ext-scrape-btn';
-  btn.textContent = 'Scrape Job';
-  btn.style.cssText = 'background:#14a800;color:white;padding:8px 16px;border:none;border-radius:4px;cursor:pointer;font-size:14px;margin-top:8px;display:block;';
+  btn.style.cssText = 'background:#14a800;color:white;padding:4px 12px;border:none;border-radius:4px;cursor:pointer;font-size:13px;margin-left:10px;display:inline-flex;align-items:center;vertical-align:middle;';
+
+  const spinner = document.createElement('span');
+  spinner.className = 'upwork-ext-spinner';
+  spinner.style.display = 'none';
+
+  const label = document.createElement('span');
+  label.textContent = 'Scrape Job';
+
+  btn.appendChild(spinner);
+  btn.appendChild(label);
+
+  function setLoading(on) {
+    btn.disabled = on;
+    btn.style.opacity = on ? '0.75' : '1';
+    btn.style.cursor = on ? 'not-allowed' : 'pointer';
+    spinner.style.display = on ? 'inline-block' : 'none';
+    if (on) label.textContent = 'Sending…';
+  }
+
+  function reset(text) {
+    label.textContent = text;
+    setTimeout(() => {
+      label.textContent = 'Scrape Job';
+      setLoading(false);
+    }, 2000);
+  }
 
   btn.addEventListener('click', () => {
+    setLoading(true);
     const jobData = scrapeDetailPage();
     if (!jobData) {
       console.warn('[upwork-ext] initDetailPage: detail scrape returned nothing');
+      reset('Failed');
       return;
     }
     chrome.runtime.sendMessage({ action: 'PUSH_JOBS', jobs: [jobData] }, (response) => {
       if (chrome.runtime.lastError) {
         console.warn('[upwork-ext] PUSH_JOBS error:', chrome.runtime.lastError.message);
-        btn.textContent = 'Failed';
-        setTimeout(() => { btn.textContent = 'Scrape Job'; }, 2000);
+        reset('Failed');
         return;
       }
-      btn.textContent = response?.success ? 'Sent!' : 'Failed';
-      setTimeout(() => { btn.textContent = 'Scrape Job'; }, 2000);
+      reset(response?.success ? 'Sent!' : 'Failed');
     });
   });
 
-  // Inject after h1 if present, otherwise prepend to body as fallback
-  const h1 = document.querySelector('h1');
-  if (h1) {
-    h1.insertAdjacentElement('afterend', btn);
-  } else {
-    document.body.prepend(btn);
+  let attempt = 0;
+  const MAX_ATTEMPTS = 10;
+  const RETRY_MS = 500;
+
+  function tryInject() {
+    attempt++;
+    if (document.getElementById('upwork-ext-scrape-btn')) return; // parallel call already injected
+
+    // Anchor priority: "Posted X ago" area → h2 → h1
+    // Note: Upwork detail pages do not use h1 for the job title.
+    let anchor = document.querySelector('[data-test="posted-on"]')
+      || document.querySelector('time[datetime]');
+
+    if (!anchor) {
+      // Scan first card section for a span that contains "ago" — the posted date text
+      const firstCard = document.querySelector('.air3-card-section');
+      if (firstCard) {
+        for (const span of firstCard.querySelectorAll('span')) {
+          if (/\bago\b/i.test(span.textContent) && span.textContent.trim().length < 50) {
+            anchor = span;
+            break;
+          }
+        }
+      }
+    }
+
+    if (!anchor) anchor = document.querySelector('h2');
+    if (!anchor) anchor = document.querySelector('h1');
+
+    if (!anchor) {
+      if (attempt < MAX_ATTEMPTS) {
+        console.debug('[upwork-ext] initDetailPage: anchor not found, retry', attempt, '/', MAX_ATTEMPTS);
+        setTimeout(tryInject, RETRY_MS);
+      } else {
+        // Last resort: float at top of body
+        document.body.prepend(btn);
+        console.warn('[upwork-ext] initDetailPage: no anchor found after', MAX_ATTEMPTS, 'attempts — prepended to body');
+      }
+      return;
+    }
+
+    anchor.insertAdjacentElement('afterend', btn);
+    console.debug('[upwork-ext] initDetailPage: button injected after', anchor.tagName || anchor.dataset?.test, 'for job', urlMatch[1]);
   }
 
-  console.debug('[upwork-ext] initDetailPage: Scrape Job button injected for job', urlMatch[1]);
+  tryInject();
+
+  // Watch for React re-renders that remove the button and re-inject it.
+  // Debounced 300ms to avoid thrashing during heavy DOM updates.
+  let reinjectionTimer = null;
+  const detailObserver = new MutationObserver(() => {
+    if (document.getElementById('upwork-ext-scrape-btn')) return;
+    clearTimeout(reinjectionTimer);
+    reinjectionTimer = setTimeout(() => {
+      if (!document.getElementById('upwork-ext-scrape-btn')) {
+        attempt = 0;
+        tryInject();
+      }
+    }, 300);
+  });
+  detailObserver.observe(document.body, { childList: true, subtree: true });
 }
 
 // ── SPA navigation router ─────────────────────────────────────────────────
@@ -512,8 +608,11 @@ function routePage() {
   const path = location.pathname;
   const search = location.search;
 
-  // Detail page: /jobs/~<id> — check first (more specific match)
-  const isDetailPage = /\/jobs\/~[a-z0-9]+/i.test(path);
+  // Detail page: /jobs/~<id>  (old) or /jobs/<slug>_~<id>/ (new Upwork format)
+  const isDetailPage = /\/jobs\/[^/?]*~[a-z0-9]+/i.test(path);
+
+  // Apply/proposal page: /nx/proposals/job/~<id>/apply/
+  const isApplyPage = /\/nx\/proposals\/job\/[^/]+\/apply/.test(path);
 
   // Search results: /nx/search/jobs or path with /search
   const isSearchPage = (
@@ -521,9 +620,11 @@ function routePage() {
     (path.includes('/jobs') && !isDetailPage)
   ) && (search.includes('q=') || path.includes('/search'));
 
-  if (isDetailPage) {
-    // Wait briefly for SPA content to render before injecting button
-    setTimeout(initDetailPage, 500);
+  if (isApplyPage) {
+    if (typeof ProposalManager !== 'undefined') ProposalManager.init();
+  } else if (isDetailPage) {
+    // initDetailPage handles its own retry loop — call immediately
+    initDetailPage();
   } else if (isSearchPage) {
     // Wait 5s for Upwork SPA to fully render before first card check
     setTimeout(initSearchPage, 5000);

@@ -6,6 +6,9 @@
 const DEFAULTS = {
   webhookUrl: '',
   scheduleInterval: 30,
+  scheduledScrapeEnabled: true,
+  searchUrl: '',
+  cfWaitSeconds: 5,
   outputFormat: 'both',
   notifications: {
     master: true,
@@ -19,7 +22,10 @@ const DEFAULTS = {
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const els = {
   webhookUrl:          () => document.getElementById('webhook-url'),
-  scheduleInterval:    () => document.getElementById('schedule-interval'),
+  scheduleInterval:          () => document.getElementById('schedule-interval'),
+  scheduledScrapeEnabled:    () => document.getElementById('scheduled-scrape-enabled'),
+  searchUrl:                 () => document.getElementById('search-url'),
+  cfWait:                    () => document.getElementById('cf-wait'),
   outputFormat:        () => document.querySelector('input[name="outputFormat"]:checked'),
   outputFormatAll:     () => document.querySelectorAll('input[name="outputFormat"]'),
   notifMaster:         () => document.getElementById('notif-master'),
@@ -51,17 +57,15 @@ function showStatus(message, isError = false) {
 }
 
 // ─── Scrape status display ────────────────────────────────────────────────────
-function showScrapeStatus(message, isError = false) {
+function showScrapeStatus(message, isError = false, persistent = false) {
   const el = els.scrapeStatus();
   el.textContent = message;
   el.className = 'save-status' + (isError ? ' error' : '');
-  // Auto-clear after 2.5s
-  setTimeout(() => {
-    if (el.textContent === message) {
-      el.textContent = '';
-      el.className = 'save-status';
-    }
-  }, 2500);
+  if (!persistent) {
+    setTimeout(() => {
+      if (el.textContent === message) { el.textContent = ''; el.className = 'save-status'; }
+    }, 2500);
+  }
 }
 
 // ─── Extension action status (NOTF-02) ────────────────────────────────────────
@@ -86,28 +90,45 @@ function showExtStatus(message, type = 'success') {
 
 // ─── On-demand scrape trigger ─────────────────────────────────────────────────
 async function triggerScrape() {
+  const btn = els.scrapeBtn();
+  btn.disabled = true;
+  btn.textContent = 'Scraping...';
   try {
-    // Query the active tab in the current window
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) {
-      showScrapeStatus('No active tab found', true);
+    if (!tab) { showScrapeStatus('No active tab found', true); return; }
+
+    const isSearchPage = tab.url &&
+      (tab.url.includes('upwork.com/nx/search/jobs') || tab.url.includes('upwork.com/ab/jobs/search'));
+    if (!isSearchPage) {
+      showScrapeStatus('Open an Upwork job search page first', true);
+      showExtStatus('Navigate to Upwork search results first', 'error');
       return;
     }
-    // Send scrapeSearch to the content script on the active tab
-    const response = await chrome.tabs.sendMessage(tab.id, { action: 'scrapeSearch' });
-    if (response && Array.isArray(response.jobs)) {
-      const msg = `Scraped ${response.jobs.length} job${response.jobs.length !== 1 ? 's' : ''}`;
-      showScrapeStatus(msg);
-      showExtStatus(msg, 'success');
-    } else {
-      showScrapeStatus('Scrape returned no data', true);
-      showExtStatus('Scrape returned no data', 'error');
+
+    const searchRes = await chrome.tabs.sendMessage(tab.id, { action: 'scrapeSearch' });
+    const searchJobs = searchRes?.jobs || [];
+    if (searchJobs.length === 0) {
+      showScrapeStatus('No jobs found on search page', true);
+      showExtStatus('No jobs found on search page', 'error');
+      return;
     }
+
+    showScrapeStatus(`Found ${searchJobs.length} jobs — scraping details in background...`, false, true);
+    showExtStatus(`Scraping ${searchJobs.length} job details in background...`, 'success');
+
+    chrome.runtime.sendMessage({ action: 'RUN_DETAIL_SCRAPE', jobs: searchJobs }, (res) => {
+      if (chrome.runtime.lastError) {
+        showScrapeStatus('Failed to hand off to background', true);
+        showExtStatus('Background scrape failed to start', 'error');
+      }
+    });
   } catch (err) {
-    // Safe-fail: content script may not be injected on non-Upwork tabs
-    console.error('[Popup] Scrape failed:', err);
+    console.error('[Popup] triggerScrape failed:', err);
     showScrapeStatus('Scrape failed — open an Upwork search page', true);
     showExtStatus('Scrape failed — open an Upwork search page', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Scrape Now';
   }
 }
 
@@ -162,9 +183,12 @@ async function loadSettings() {
 
     // Merge stored values over defaults (deep merge for notifications object)
     const settings = {
-      webhookUrl:       stored.webhookUrl       ?? DEFAULTS.webhookUrl,
-      scheduleInterval: stored.scheduleInterval ?? DEFAULTS.scheduleInterval,
-      outputFormat:     stored.outputFormat     ?? DEFAULTS.outputFormat,
+      webhookUrl:             stored.webhookUrl             ?? DEFAULTS.webhookUrl,
+      scheduleInterval:       stored.scheduleInterval       ?? DEFAULTS.scheduleInterval,
+      scheduledScrapeEnabled: stored.scheduledScrapeEnabled ?? DEFAULTS.scheduledScrapeEnabled,
+      searchUrl:              stored.searchUrl              ?? DEFAULTS.searchUrl,
+      cfWaitSeconds:          stored.cfWaitSeconds          ?? DEFAULTS.cfWaitSeconds,
+      outputFormat:           stored.outputFormat           ?? DEFAULTS.outputFormat,
       notifications: {
         master:          stored['notifications.master']         ?? DEFAULTS.notifications.master,
         scrapeComplete:  stored['notifications.scrapeComplete'] ?? DEFAULTS.notifications.scrapeComplete,
@@ -178,6 +202,9 @@ async function loadSettings() {
     els.webhookUrl().value = settings.webhookUrl;
 
     els.scheduleInterval().value = String(settings.scheduleInterval);
+    els.scheduledScrapeEnabled().checked = settings.scheduledScrapeEnabled;
+    els.searchUrl().value = settings.searchUrl;
+    els.cfWait().value = String(settings.cfWaitSeconds);
 
     els.outputFormatAll().forEach(radio => {
       radio.checked = (radio.value === settings.outputFormat);
@@ -206,6 +233,9 @@ async function saveSettings() {
     const settings = {
       webhookUrl:                      els.webhookUrl().value.trim(),
       scheduleInterval:                parseInt(els.scheduleInterval().value, 10),
+      scheduledScrapeEnabled:          els.scheduledScrapeEnabled().checked,
+      searchUrl:                       els.searchUrl().value.trim(),
+      cfWaitSeconds:                   Math.max(3, Math.min(60, parseInt(els.cfWait().value, 10) || 5)),
       outputFormat:                    selectedFormat ? selectedFormat.value : DEFAULTS.outputFormat,
       'notifications.master':          els.notifMaster().checked,
       'notifications.scrapeComplete':  els.notifScrapeComplete().checked,
@@ -221,6 +251,7 @@ async function saveSettings() {
       await chrome.runtime.sendMessage({
         action: 'updateAlarm',
         intervalMinutes: settings.scheduleInterval,
+        scheduledScrapeEnabled: settings.scheduledScrapeEnabled,
       });
     } catch (err) {
       // Safe-fail: alarm update failure does not block save confirmation

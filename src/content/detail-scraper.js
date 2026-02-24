@@ -62,14 +62,22 @@ export function scrapeDetailPage() {
     }
   }
 
-  // budget — strong inside p.m-0
-  const budget = firstText([
+  // budget — try known selectors, then fall back to scanning page text for $X/hr patterns
+  let budget = firstText([
     'p.m-0 > strong',
     '[data-test="budget"]',
     '[data-test="hourly-rate"]',
+    '[data-test="HourlyRate"]',
     '.budget',
     '.hourly-rate',
   ]);
+  if (!budget) {
+    const pageText = document.body.innerText || '';
+    // Match range first ("$30.00 – $100.00/hr"), then single ("$100.00/hr")
+    const hrMatch = pageText.match(/\$[\d,]+(?:\.\d+)?\s*[–\-]\s*\$[\d,]+(?:\.\d+)?\s*\/\s*hr\b/i)
+      || pageText.match(/\$[\d,]+(?:\.\d+)?\s*\/\s*hr\b/i);
+    if (hrMatch) budget = hrMatch[0].trim();
+  }
 
   // payment_type — div.description or span.type contains "Fixed-price" or "Hourly"
   let payment_type = null;

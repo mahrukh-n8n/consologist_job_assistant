@@ -60,4 +60,42 @@ export class WebhookClient {
     console.error('WebhookClient: all retries failed for job', jobData.job_id);
     return false;
   }
+
+  /**
+   * Dispatch all jobs in a single POST request as a JSON array.
+   * Retries up to 3 times with exponential backoff.
+   *
+   * @param {string} url - The n8n webhook URL to POST to
+   * @param {Object[]} jobs - Array of transformed job objects
+   * @returns {Promise<boolean>} true on success, false after all retries exhausted
+   */
+  async dispatchBatch(url, jobs) {
+    const MAX_ATTEMPTS = 3;
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      }
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(jobs),
+        });
+
+        if (response.ok) {
+          return true;
+        }
+
+        const statusText = `HTTP ${response.status} ${response.statusText}`;
+        console.warn(`WebhookClient: batch attempt ${attempt + 1} failed: ${statusText}`);
+      } catch (err) {
+        console.warn(`WebhookClient: batch attempt ${attempt + 1} failed: ${err.message}`);
+      }
+    }
+
+    console.error('WebhookClient: all batch retries failed for', jobs.length, 'jobs');
+    return false;
+  }
 }

@@ -75,8 +75,10 @@ export function transformJob(raw) {
         max: parseFloat(rangeMatch[2].replace(/,/g, '')) || 0,
       };
     }
+    // Single value (e.g. "$100/hr") — treat as both min and max
     const singleMatch = budgetStr.match(/\$([\d,]+\.?\d*)/);
-    return { min: singleMatch ? parseFloat(singleMatch[1].replace(/,/g, '')) || 0 : 0, max: 0 };
+    const val = singleMatch ? parseFloat(singleMatch[1].replace(/,/g, '')) || 0 : 0;
+    return { min: val, max: val };
   }
 
   /** Split "City, Country" or "Country Code" location string. */

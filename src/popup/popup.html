@@ -38,6 +38,45 @@
         </select>
       </section>
 
+      <!-- SETT-05: Scheduled scrape enable/disable -->
+      <section class="setting-group">
+        <div class="toggle-row">
+          <label class="toggle-label">
+            <input type="checkbox" id="scheduled-scrape-enabled" name="scheduledScrapeEnabled" checked>
+            Enable scheduled scraping
+          </label>
+        </div>
+        <p class="hint">When unchecked, automatic background scraping is paused.</p>
+      </section>
+
+      <!-- SETT-06: Scheduled scrape search URL -->
+      <section class="setting-group">
+        <label for="search-url">Scheduled Scrape URL</label>
+        <input
+          type="url"
+          id="search-url"
+          name="searchUrl"
+          placeholder="https://www.upwork.com/nx/search/jobs/?q=..."
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <p class="hint">Upwork search URL used by scheduled scraping. Paste your saved search with filters and keywords.</p>
+      </section>
+
+      <!-- SETT-07: Cloudflare wait -->
+      <section class="setting-group">
+        <label for="cf-wait">CF wait (seconds)</label>
+        <input
+          type="number"
+          id="cf-wait"
+          name="cfWaitSeconds"
+          min="3"
+          max="60"
+          value="5"
+        >
+        <p class="hint">Extra wait after the page loads before scraping. Increase (e.g. 15–30) if Cloudflare blocks scheduled scrapes.</p>
+      </section>
+
       <!-- SETT-03: Output format -->
       <section class="setting-group">
         <span class="label" id="output-format-label">Output Format</span>

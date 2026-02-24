@@ -29,13 +29,20 @@ chrome.runtime.onInstalled.addListener(registerAlarmFromStorage);
 chrome.runtime.onStartup.addListener(registerAlarmFromStorage);
 
 async function registerAlarmFromStorage() {
-  const { scheduleInterval } = await chrome.storage.local.get({ scheduleInterval: DEFAULT_INTERVAL_MINUTES });
-  await chrome.alarms.clear(ALARM_NAME);
-  chrome.alarms.create(ALARM_NAME, {
-    delayInMinutes: scheduleInterval,
-    periodInMinutes: scheduleInterval,
+  const { scheduleInterval, scheduledScrapeEnabled } = await chrome.storage.local.get({
+    scheduleInterval: DEFAULT_INTERVAL_MINUTES,
+    scheduledScrapeEnabled: true,
   });
-  console.debug('[upwork-ext] alarm registered:', scheduleInterval, 'min');
+  await chrome.alarms.clear(ALARM_NAME);
+  if (scheduledScrapeEnabled !== false) {
+    chrome.alarms.create(ALARM_NAME, {
+      delayInMinutes: scheduleInterval,
+      periodInMinutes: scheduleInterval,
+    });
+    console.debug('[SW] alarm registered:', scheduleInterval, 'min');
+  } else {
+    console.debug('[SW] alarm not registered — scheduled scraping disabled');
+  }
 }
 
 // ─── CSV export handler ───────────────────────────────────────────────────────
@@ -93,8 +100,9 @@ async function fireNotification(type, message) {
   try {
     const keys = ['notifications.master', `notifications.${type}`];
     const settings = await chrome.storage.local.get(keys);
-    if (!settings['notifications.master']) return;
-    if (!settings[`notifications.${type}`]) return;
+    // Treat missing keys as enabled (default = on until user explicitly turns off)
+    if (settings['notifications.master'] === false) return;
+    if (settings[`notifications.${type}`] === false) return;
     chrome.notifications.create('ext-notif-' + Date.now(), {
       type: 'basic',
       iconUrl: chrome.runtime.getURL('icons/icon48.png'),
@@ -109,6 +117,7 @@ async function fireNotification(type, message) {
 
 // Expose to DevTools console (module scope doesn't attach to self automatically)
 self.fireNotification = fireNotification;
+self.runScheduledScrape = runScheduledScrape;
 
 // ─── Message router ───────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -117,12 +126,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Update alarm when user changes interval in popup settings
   if (message.action === 'updateAlarm') {
     const intervalMinutes = message.intervalMinutes || DEFAULT_INTERVAL_MINUTES;
+    const enabled = message.scheduledScrapeEnabled !== false;
     chrome.alarms.clear(ALARM_NAME).then(() => {
-      chrome.alarms.create(ALARM_NAME, {
-        delayInMinutes: intervalMinutes,
-        periodInMinutes: intervalMinutes,
-      });
-      console.debug('[upwork-ext] alarm updated to:', intervalMinutes, 'min');
+      if (enabled) {
+        chrome.alarms.create(ALARM_NAME, {
+          delayInMinutes: intervalMinutes,
+          periodInMinutes: intervalMinutes,
+        });
+        console.debug('[SW] alarm updated:', intervalMinutes, 'min, enabled');
+      } else {
+        console.debug('[SW] alarm cleared — scheduled scraping disabled');
+      }
       sendResponse({ success: true });
     });
     return true; // keep channel open for async response
@@ -177,7 +191,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       // NOTF-01: toast notification for webhook sent
-      await fireNotification('webhookSent', `Webhook: sent ${sent} jobs`);
+      if (sent > 0) {
+        await fireNotification('webhookSent', `Webhook: sent ${sent} job${sent === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}`);
+      } else {
+        await fireNotification('errors', `Webhook: all ${failed} job${failed === 1 ? '' : 's'} failed to send`);
+      }
       sendResponse({ success: true, sent, failed });
     })();
     return true; // keep channel open for async response
@@ -218,6 +236,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // keep channel open for async response
   }
 
+  if (message.action === 'RUN_DETAIL_SCRAPE') {
+    sendResponse({ success: true, queued: true }); // immediate — popup can close
+    (async () => {
+      const searchJobs = message.jobs;
+      if (!searchJobs?.length) {
+        await fireNotification('errors', 'Detail scrape: no jobs to process');
+        return;
+      }
+      const detailedJobs = await scrapeJobDetails(searchJobs);
+      if (detailedJobs.length > 0) {
+        await chrome.storage.local.set({ lastScrapedJobs: detailedJobs, lastScrapeTime: new Date().toISOString() });
+        await dispatchJobsBatch(detailedJobs);
+        await fireNotification('scrapeComplete', `Scrape Now: ${detailedJobs.length} jobs (full detail)`);
+      } else {
+        await fireNotification('errors', 'Detail scrape: all tabs failed');
+      }
+    })();
+    return true;
+  }
+
   return false; // synchronous response for unhandled messages
 });
 
@@ -231,77 +269,181 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // ─── Tab management helpers ───────────────────────────────────────────────────
 
 /**
- * Waits for a tab to finish loading, then waits an additional 2s for
- * JS-rendered content (Upwork SPA) to settle.
+ * Waits for a tab to finish loading and then remain stable (no further
+ * navigations) before resolving. Handles Cloudflare challenge pages that
+ * fire 'complete' and then immediately redirect to the real Upwork page:
+ *
+ *   Cloudflare page complete  →  loading (redirect)  →  Upwork page complete
+ *                                   ↑ resets timer
+ *
+ * Stability windows:
+ *   - Normal load:           2 s after last 'complete'
+ *   - After a redirect:      5 s after last 'complete' (SPA needs more time)
+ * Overall timeout: 60 s (generous for slow Cloudflare challenges).
  *
  * @param {number} tabId
  * @returns {Promise<void>}
  */
-function waitForTabLoad(tabId) {
+async function waitForTabLoad(tabId) {
+  const BASE_EXTRA_MS = 2000;
+  const CF_EXTRA_MS   = 5000;
+  const TIMEOUT_MS    = 60000;
+
   return new Promise((resolve) => {
+    let settled    = false;
+    let stableTimer = null;
+    let hadRedirect = false;
+
+    function cleanup() {
+      chrome.tabs.onUpdated.removeListener(listener);
+      if (stableTimer) clearTimeout(stableTimer);
+      clearTimeout(timeoutId);
+    }
+
+    function done() {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    }
+
+    const timeoutId = setTimeout(() => {
+      console.warn('[SW] waitForTabLoad: timeout for tabId', tabId);
+      done();
+    }, TIMEOUT_MS);
+
+    function scheduleStable() {
+      if (stableTimer) clearTimeout(stableTimer);
+      const delay = hadRedirect ? CF_EXTRA_MS : BASE_EXTRA_MS;
+      stableTimer = setTimeout(done, delay);
+    }
+
     function listener(id, changeInfo) {
-      if (id === tabId && changeInfo.status === 'complete') {
-        chrome.tabs.onUpdated.removeListener(listener);
-        // Extra delay for JS-rendered content
-        setTimeout(resolve, 2000);
+      if (id !== tabId) return;
+      if (changeInfo.status === 'loading') {
+        if (stableTimer) {
+          // A navigation started after a previous 'complete' → redirect detected
+          hadRedirect = true;
+          clearTimeout(stableTimer);
+          stableTimer = null;
+        }
+      } else if (changeInfo.status === 'complete') {
+        scheduleStable();
       }
     }
+
+    // Register listener BEFORE checking current state to avoid missed events
     chrome.tabs.onUpdated.addListener(listener);
+
+    // If the tab is already complete (e.g. cached), start the stability timer now
+    chrome.tabs.get(tabId)
+      .then(tab => { if (tab.status === 'complete') scheduleStable(); })
+      .catch(() => { /* tab not yet queryable — listener will catch complete */ });
   });
+}
+
+function randomDelay(min, max) {
+  const ms = Math.floor(Math.random() * (max - min + 1)) + min;
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function scrapeJobDetails(searchJobs) {
+  const detailedJobs = [];
+  for (let i = 0; i < searchJobs.length; i++) {
+    const job = searchJobs[i];
+    if (i > 0) await randomDelay(2000, 5000);
+    let detailTab = null;
+    try {
+      detailTab = await chrome.tabs.create({ url: job.url, active: false });
+      await waitForTabLoad(detailTab.id);
+      const res = await chrome.tabs.sendMessage(detailTab.id, { action: 'scrapeDetail' });
+      const detailJob = res?.job;
+      detailedJobs.push((!detailJob || !detailJob.job_id) ? job : detailJob);
+    } catch (err) {
+      console.error('[SW] scrapeJobDetails: failed for', job.url, err.message);
+      detailedJobs.push(job); // shallow fallback
+    } finally {
+      if (detailTab?.id) {
+        try { await chrome.tabs.remove(detailTab.id); } catch (_) {}
+      }
+    }
+  }
+  return detailedJobs;
+}
+
+async function dispatchJobsBatch(jobs) {
+  const { webhookUrl, outputFormat } = await chrome.storage.local.get({
+    webhookUrl: '',
+    outputFormat: 'both',
+  });
+  if (outputFormat === 'csv' || !webhookUrl) return;
+  const transformed = jobs.map(transformJob).filter(Boolean);
+  if (transformed.length === 0) return;
+  const client = new WebhookClient();
+  const ok = await client.dispatchBatch(webhookUrl, transformed);
+  await fireNotification('webhookSent', `Webhook: ${ok ? 'sent' : 'failed'} ${transformed.length} jobs`);
+  console.debug('[SW] dispatchJobsBatch:', ok ? 'success' : 'FAILED', transformed.length, 'jobs');
 }
 
 // ─── Scrape orchestration ─────────────────────────────────────────────────────
 
-/**
- * Finds or opens an Upwork search tab, sends a scrapeSearch message to the
- * content script, stores results in chrome.storage.local, and closes the tab
- * if it was opened by this function.
- */
 async function runScheduledScrape() {
-  // Find an existing Upwork search tab
-  const tabs = await chrome.tabs.query({ url: 'https://www.upwork.com/nx/search/jobs/*' });
+  const { scheduledScrapeEnabled, searchUrl, cfWaitSeconds } = await chrome.storage.local.get({
+    scheduledScrapeEnabled: true,
+    searchUrl: '',
+    cfWaitSeconds: 5,
+  });
+  if (!scheduledScrapeEnabled) return;
 
-  let tabId;
-  let opened = false;
+  // Validate and resolve search URL — must be an Upwork search page
+  const targetUrl = (searchUrl && searchUrl.includes('upwork.com'))
+    ? searchUrl
+    : 'https://www.upwork.com/nx/search/jobs/';
+  console.debug('[SW] runScheduledScrape: opening', targetUrl);
 
-  if (tabs.length > 0) {
-    tabId = tabs[0].id;
-  } else {
-    // No search tab open — open one in background
-    const tab = await chrome.tabs.create({
-      url: 'https://www.upwork.com/nx/search/jobs/',
-      active: false,
-    });
-    tabId = tab.id;
-    opened = true;
-
-    // Wait for tab to finish loading + SPA render delay
-    await waitForTabLoad(tabId);
+  // Phase 1: shallow search scrape
+  // Cloudflare Turnstile checks document.visibilityState and will not solve in
+  // a hidden background tab. However, once a user has visited Upwork the
+  // cf_clearance cookie is set for the domain — new background tabs can then
+  // bypass the challenge automatically.
+  // Strategy: open background tab if any Upwork tab exists (cookie is live),
+  // otherwise open as active so Cloudflare can solve the challenge.
+  const existingUpworkTabs = await chrome.tabs.query({ url: '*://*.upwork.com/*' });
+  const needsActivTab = existingUpworkTabs.length === 0;
+  if (needsActivTab) {
+    console.debug('[SW] runScheduledScrape: no existing Upwork tabs — opening active tab for Cloudflare');
   }
-
-  // Send scrape command to content script in that tab
-  let jobs = [];
+  const tab = await chrome.tabs.create({ url: targetUrl, active: needsActivTab });
+  await waitForTabLoad(tab.id);
+  // Extra wait for Cloudflare challenge JS to finish and redirect to settle.
+  // Configurable via popup "CF wait (seconds)" setting (default 5s, range 3–60s).
+  const cfWaitMs = Math.max(3000, (cfWaitSeconds || 5) * 1000);
+  console.debug('[SW] runScheduledScrape: CF wait', cfWaitMs / 1000, 's');
+  await new Promise((resolve) => setTimeout(resolve, cfWaitMs));
+  let searchJobs = [];
   try {
-    const response = await chrome.tabs.sendMessage(tabId, { action: 'scrapeSearch' });
-    jobs = response?.jobs || [];
-    console.debug('[upwork-ext] scheduled scrape complete:', jobs.length, 'jobs');
+    const res = await chrome.tabs.sendMessage(tab.id, { action: 'scrapeSearch' });
+    searchJobs = res?.jobs || [];
   } catch (err) {
-    console.error('[upwork-ext] scrape message failed:', err);
+    console.error('[SW] runScheduledScrape: search failed:', err);
+  }
+  try { await chrome.tabs.remove(tab.id); } catch (_) {}
+  if (searchJobs.length === 0) {
+    await fireNotification('errors', 'Scheduled scrape: no jobs found — check your Scheduled Scrape URL');
+    return;
   }
 
-  // Close the tab if we opened it
-  if (opened) {
-    await chrome.tabs.remove(tabId);
+  // Phase 2: detail scrape (sequential, random delays)
+  const detailedJobs = await scrapeJobDetails(searchJobs);
+  if (detailedJobs.length === 0) {
+    await fireNotification('errors', 'Scheduled scrape: all detail tabs failed to load');
+    return;
   }
 
-  // Store results for popup display and downstream phases
-  if (jobs.length > 0) {
-    await chrome.storage.local.set({
-      lastScrapedJobs: jobs,
-      lastScrapeTime: new Date().toISOString(),
-    });
-    await fireNotification('scrapeComplete', `Scraped ${jobs.length} jobs from search`);
-  }
+  // Phase 3: persist + batch webhook dispatch + notify
+  await chrome.storage.local.set({ lastScrapedJobs: detailedJobs, lastScrapeTime: new Date().toISOString() });
+  await dispatchJobsBatch(detailedJobs);
+  await fireNotification('scrapeComplete', `Scraped ${detailedJobs.length} jobs (full detail)`);
 }
 
 // ─── Proposal load handler ────────────────────────────────────────────────────
@@ -321,18 +463,20 @@ async function runScheduledScrape() {
  */
 async function handleLoadProposal(jobData, sendResponse) {
   try {
-    const settings = await chrome.storage.local.get(['proposalWebhookUrl']);
-    const url = settings.proposalWebhookUrl;
+    // Uses the same webhookUrl as job data — n8n routes by status field.
+    // Sends { job_id, status: 'proposal' } so n8n can distinguish from scrape payloads.
+    const settings = await chrome.storage.local.get(['webhookUrl']);
+    const url = settings.webhookUrl;
 
     if (!url) {
-      sendResponse({ error: 'No proposal webhook URL configured. Set it in extension settings.' });
+      sendResponse({ error: 'No webhook URL configured. Set it in extension settings.' });
       return;
     }
 
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(jobData),
+      body: JSON.stringify({ job_id: jobData.job_id, status: 'proposal' }),
     });
 
     if (!response.ok) {
@@ -387,7 +531,7 @@ async function handleMatchStatus(message) {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ job_ids: message.jobIds, statuscheck: true }),
+      body: JSON.stringify({ job_ids: message.jobIds, status: 'search' }),
     });
 
     if (!response.ok) {
