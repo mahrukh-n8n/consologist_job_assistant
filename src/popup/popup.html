@@ -127,6 +127,39 @@
         <button id="scrape-btn" type="button">Scrape Now</button>
         <div id="scrape-status" class="save-status" aria-live="polite"></div>
       </section>
+
+      <!-- CRON-01: Cron job manager -->
+      <section class="setting-group cron-manager">
+        <span class="label">Cron Jobs</span>
+
+        <div class="cron-form">
+          <input
+            type="text"
+            id="cron-name"
+            placeholder="Job name (e.g. Frontend jobs)"
+            autocomplete="off"
+          >
+          <input
+            type="url"
+            id="cron-webhook"
+            placeholder="Webhook URL (returns job ID array)"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <input
+            type="number"
+            id="cron-interval"
+            placeholder="Interval (minutes)"
+            min="1"
+            max="1440"
+            value="30"
+          >
+          <button id="cron-add-btn" type="button">Add Cron</button>
+          <div id="cron-status" class="save-status" aria-live="polite"></div>
+        </div>
+
+        <ul id="cron-list" class="cron-list" aria-label="Saved cron jobs"></ul>
+      </section>
     </main>
 
     <footer>

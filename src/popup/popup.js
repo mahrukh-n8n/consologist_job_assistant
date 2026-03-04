@@ -288,6 +288,100 @@ document.addEventListener('DOMContentLoaded', () => {
   els.scrapeBtn().addEventListener('click', triggerScrape);
 });
 
+// ─── Cron Job Manager (CRON-01) ───────────────────────────────────────────────
+
+function showCronStatus(message, isError = false) {
+  const el = document.getElementById('cron-status');
+  if (!el) return;
+  el.textContent = message;
+  el.className = 'save-status' + (isError ? ' error' : '');
+  setTimeout(() => { if (el.textContent === message) { el.textContent = ''; el.className = 'save-status'; } }, 3000);
+}
+
+async function loadCronList() {
+  const { cronJobs = [] } = await chrome.storage.local.get({ cronJobs: [] });
+  const list = document.getElementById('cron-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (cronJobs.length === 0) {
+    list.innerHTML = '<li class="cron-empty">No cron jobs saved.</li>';
+    return;
+  }
+  for (const cron of cronJobs) {
+    const li = document.createElement('li');
+    li.className = 'cron-item';
+    li.dataset.cronId = cron.id;
+    li.innerHTML = `
+      <div class="cron-info">
+        <strong class="cron-name">${escapeHtml(cron.name)}</strong>
+        <span class="cron-interval">every ${cron.intervalMinutes} min</span>
+        <span class="cron-url" title="${escapeHtml(cron.webhookUrl)}">${escapeHtml(truncate(cron.webhookUrl, 40))}</span>
+      </div>
+      <button class="cron-delete-btn" data-id="${cron.id}" type="button" aria-label="Delete ${escapeHtml(cron.name)}">Delete</button>
+    `;
+    list.appendChild(li);
+  }
+  // Wire delete buttons
+  list.querySelectorAll('.cron-delete-btn').forEach(btn => {
+    btn.addEventListener('click', () => deleteCron(btn.dataset.id));
+  });
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function truncate(str, max) {
+  return str.length > max ? str.slice(0, max) + '\u2026' : str;
+}
+
+async function addCron() {
+  const name = document.getElementById('cron-name')?.value.trim();
+  const webhookUrl = document.getElementById('cron-webhook')?.value.trim();
+  const intervalMinutes = parseInt(document.getElementById('cron-interval')?.value, 10);
+
+  if (!name) { showCronStatus('Name is required', true); return; }
+  if (!webhookUrl || !webhookUrl.startsWith('http')) { showCronStatus('Valid webhook URL required', true); return; }
+  if (!intervalMinutes || intervalMinutes < 1) { showCronStatus('Interval must be >= 1 minute', true); return; }
+
+  const cron = {
+    id: Date.now().toString(),
+    name,
+    webhookUrl,
+    intervalMinutes,
+    createdAt: new Date().toISOString(),
+  };
+
+  const { cronJobs = [] } = await chrome.storage.local.get({ cronJobs: [] });
+  cronJobs.push(cron);
+  await chrome.storage.local.set({ cronJobs });
+
+  // Ask SW to register the alarm
+  chrome.runtime.sendMessage({ action: 'REGISTER_CRON_ALARM', cron });
+
+  // Reset form
+  document.getElementById('cron-name').value = '';
+  document.getElementById('cron-webhook').value = '';
+  document.getElementById('cron-interval').value = '30';
+
+  showCronStatus(`Cron "${name}" saved`);
+  await loadCronList();
+}
+
+async function deleteCron(cronId) {
+  const { cronJobs = [] } = await chrome.storage.local.get({ cronJobs: [] });
+  const updated = cronJobs.filter(c => c.id !== cronId);
+  await chrome.storage.local.set({ cronJobs: updated });
+  chrome.runtime.sendMessage({ action: 'DELETE_CRON_ALARM', cronId });
+  await loadCronList();
+}
+
+// Wire up on DOMContentLoaded (add listener; existing DOMContentLoaded wires other things)
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('cron-add-btn')?.addEventListener('click', addCron);
+  loadCronList();
+});
+
 // ─── Pattern for future action buttons (Phases 2-3 popup additions) ──────────
 // When adding scrape/webhook action buttons, wire responses like this:
 //
