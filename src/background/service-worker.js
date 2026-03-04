@@ -25,8 +25,14 @@ self.addEventListener('activate', () => {
 // ─── Alarm registration ───────────────────────────────────────────────────────
 // Register alarm on install and startup from stored interval.
 // Storage key: scheduleInterval — matches the key popup.js writes to storage.
-chrome.runtime.onInstalled.addListener(registerAlarmFromStorage);
-chrome.runtime.onStartup.addListener(registerAlarmFromStorage);
+chrome.runtime.onInstalled.addListener(async () => {
+  await registerAlarmFromStorage();
+  await registerAllCronAlarms();
+});
+chrome.runtime.onStartup.addListener(async () => {
+  await registerAlarmFromStorage();
+  await registerAllCronAlarms();
+});
 
 async function registerAlarmFromStorage() {
   const { scheduleInterval, scheduledScrapeEnabled } = await chrome.storage.local.get({
@@ -42,6 +48,19 @@ async function registerAlarmFromStorage() {
     console.debug('[SW] alarm registered:', scheduleInterval, 'min');
   } else {
     console.debug('[SW] alarm not registered — scheduled scraping disabled');
+  }
+}
+
+// ─── Cron alarm registration ──────────────────────────────────────────────────
+async function registerAllCronAlarms() {
+  const { cronJobs = [] } = await chrome.storage.local.get({ cronJobs: [] });
+  for (const cron of cronJobs) {
+    const alarmName = 'cron-' + cron.id;
+    await chrome.alarms.clear(alarmName);
+    chrome.alarms.create(alarmName, {
+      delayInMinutes: cron.intervalMinutes,
+      periodInMinutes: cron.intervalMinutes,
+    });
   }
 }
 
@@ -118,6 +137,8 @@ async function fireNotification(type, message) {
 // Expose to DevTools console (module scope doesn't attach to self automatically)
 self.fireNotification = fireNotification;
 self.runScheduledScrape = runScheduledScrape;
+self.registerAllCronAlarms = registerAllCronAlarms;
+self.runCronJob = runCronJob;
 
 // ─── Message router ───────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -256,11 +277,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === 'REGISTER_CRON_ALARM') {
+    const { cron } = message;
+    const alarmName = 'cron-' + cron.id;
+    chrome.alarms.clear(alarmName).then(() => {
+      chrome.alarms.create(alarmName, {
+        delayInMinutes: cron.intervalMinutes,
+        periodInMinutes: cron.intervalMinutes,
+      });
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  if (message.action === 'DELETE_CRON_ALARM') {
+    chrome.alarms.clear('cron-' + message.cronId).then(() => {
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
   return false; // synchronous response for unhandled messages
 });
 
 // ─── Alarm listener ───────────────────────────────────────────────────────────
 chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name.startsWith('cron-')) {
+    const cronId = alarm.name.slice(5);
+    await runCronJob(cronId);
+    return;
+  }
   if (alarm.name !== ALARM_NAME) return;
   console.debug('[upwork-ext] alarm fired — starting scrape cycle');
   await runScheduledScrape();
@@ -444,6 +490,53 @@ async function runScheduledScrape() {
   await chrome.storage.local.set({ lastScrapedJobs: detailedJobs, lastScrapeTime: new Date().toISOString() });
   await dispatchJobsBatch(detailedJobs);
   await fireNotification('scrapeComplete', `Scraped ${detailedJobs.length} jobs (full detail)`);
+}
+
+// ─── Cron job runner (CRON-01) ────────────────────────────────────────────────
+async function runCronJob(cronId) {
+  const { cronJobs = [] } = await chrome.storage.local.get({ cronJobs: [] });
+  const cron = cronJobs.find(c => c.id === cronId);
+  if (!cron) {
+    console.warn('[SW] runCronJob: cron not found', cronId);
+    return;
+  }
+  await fireNotification('scrapeComplete', `Cron "${cron.name}" fired — fetching job IDs`);
+
+  // POST to cron webhook, expect JSON array of job ID strings
+  let jobIds = [];
+  try {
+    const res = await fetch(cron.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cronId: cron.id, name: cron.name }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    jobIds = await res.json();
+    if (!Array.isArray(jobIds)) throw new Error('Response is not an array');
+  } catch (err) {
+    console.error('[SW] runCronJob: webhook failed', err.message);
+    await fireNotification('errors', `Cron "${cron.name}": webhook failed — ${err.message}`);
+    return;
+  }
+
+  if (jobIds.length === 0) {
+    await fireNotification('scrapeComplete', `Cron "${cron.name}": webhook returned 0 job IDs`);
+    return;
+  }
+
+  // Build job stubs for scrapeJobDetails (needs {url} at minimum; job_id is bonus)
+  const searchJobs = jobIds.map(id => ({
+    job_id: id,
+    url: `https://www.upwork.com/jobs/~${id}`,
+    title: '',
+  }));
+
+  const detailedJobs = await scrapeJobDetails(searchJobs);
+  if (detailedJobs.length > 0) {
+    await chrome.storage.local.set({ lastScrapedJobs: detailedJobs, lastScrapeTime: new Date().toISOString() });
+    await dispatchJobsBatch(detailedJobs);
+  }
+  await fireNotification('scrapeComplete', `Cron "${cron.name}": scraped ${detailedJobs.length} jobs`);
 }
 
 // ─── Proposal load handler ────────────────────────────────────────────────────
