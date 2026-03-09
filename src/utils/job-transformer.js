@@ -126,7 +126,7 @@ export function transformJob(raw) {
     unansweredInvites: 0,
     invitationsSent: 0,
     numberOfPositionsToHire: 1,
-    hireRate: 0,
+    hireRate: raw.hire_rate ?? 0,
     clientCountry: location.country,
     clientCity: location.city,
     feedbackScore: parseRating(raw.client_rating),

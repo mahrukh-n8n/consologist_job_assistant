@@ -287,6 +287,14 @@ function scrapeDetailPage() {
     ]);
   }
 
+  // hire_rate — div inside [data-qa="client-job-posting-stats"]
+  let hire_rate = null;
+  const jobStatsEl = document.querySelector('[data-qa="client-job-posting-stats"] div');
+  if (jobStatsEl) {
+    const match = jobStatsEl.textContent.trim().match(/(\d+)%\s*hire rate/i);
+    if (match) hire_rate = parseInt(match[1], 10);
+  }
+
   const job = {
     job_id,
     title,
@@ -303,9 +311,10 @@ function scrapeDetailPage() {
     client_location,
     client_rating,
     client_total_spent,
+    hire_rate,
   };
 
-  console.debug('[upwork-ext] detail scrape:', job_id, '— fields populated:', Object.values(job).filter(v => v !== null && v !== false && !(Array.isArray(v) && v.length === 0)).length, '/ 15');
+  console.debug('[upwork-ext] detail scrape:', job_id, '— fields populated:', Object.values(job).filter(v => v !== null && v !== false && !(Array.isArray(v) && v.length === 0)).length, '/ 16');
 
   return job;
 }
