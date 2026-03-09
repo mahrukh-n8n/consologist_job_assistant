@@ -511,8 +511,27 @@ async function runCronJob(cronId) {
       body: JSON.stringify({ cronId: cron.id, name: cron.name }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    jobIds = await res.json();
-    if (!Array.isArray(jobIds)) throw new Error('Response is not an array');
+    const raw = await res.json();
+    // Support all response shapes:
+    // 1. ["id1","id2"]
+    // 2. [{jobId:"id1"}, {jobId:"id2"}]
+    // 3. [{jobId:["id1","id2"]}]
+    // 4. {jobId:["id1","id2"]}  (bare object)
+    if (!Array.isArray(raw) && typeof raw === 'object' && raw !== null) {
+      const val = raw.jobId || raw.job_id || raw.ids;
+      if (Array.isArray(val)) { jobIds = val; }
+      else throw new Error('Response is not an array');
+    } else if (Array.isArray(raw)) {
+      if (raw.length === 1 && typeof raw[0] === 'object' && raw[0] !== null) {
+        const val = raw[0].jobId || raw[0].job_id || raw[0].ids;
+        if (Array.isArray(val)) { jobIds = val; }
+        else jobIds = raw.map(item => item.jobId || item.job_id || item.id).filter(Boolean);
+      } else {
+        jobIds = raw.map(item => (typeof item === 'object' && item !== null ? item.jobId || item.job_id || item.id : item)).filter(Boolean);
+      }
+    } else {
+      throw new Error('Response is not an array');
+    }
   } catch (err) {
     console.error('[SW] runCronJob: webhook failed', err.message);
     await fireNotification('errors', `Cron "${cron.name}": webhook failed — ${err.message}`);
@@ -522,6 +541,20 @@ async function runCronJob(cronId) {
   if (jobIds.length === 0) {
     await fireNotification('scrapeComplete', `Cron "${cron.name}": webhook returned 0 job IDs`);
     return;
+  }
+
+  // Respect CF wait setting — same logic as runScheduledScrape
+  const { cfWaitSeconds } = await chrome.storage.local.get({ cfWaitSeconds: 5 });
+  const cfWaitMs = Math.max(3, Math.min(cfWaitSeconds, 60)) * 1000;
+  const existingUpworkTabs = await chrome.tabs.query({ url: '*://*.upwork.com/*' });
+  if (existingUpworkTabs.length === 0) {
+    // No active Upwork session — open a tab so CF can solve, then close it
+    const warmTab = await chrome.tabs.create({ url: 'https://www.upwork.com/', active: true });
+    await waitForTabLoad(warmTab.id);
+    await new Promise(r => setTimeout(r, cfWaitMs));
+    try { await chrome.tabs.remove(warmTab.id); } catch (_) {}
+  } else {
+    await new Promise(r => setTimeout(r, cfWaitMs));
   }
 
   // Build job stubs for scrapeJobDetails (needs {url} at minimum; job_id is bonus)

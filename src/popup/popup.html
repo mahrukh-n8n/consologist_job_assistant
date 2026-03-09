@@ -128,9 +128,15 @@
         <div id="scrape-status" class="save-status" aria-live="polite"></div>
       </section>
 
+      <!-- DEBUG: Selector tester -->
+      <section class="setting-group">
+        <button id="debug-selectors-btn" type="button">Test Selectors</button>
+        <div id="debug-results" style="margin-top:8px;font-size:11px;line-height:1.6;display:none;max-height:260px;overflow-y:auto;background:var(--bg-secondary,#1a1a1a);border:1px solid var(--border,#333);border-radius:6px;padding:8px;"></div>
+      </section>
+
       <!-- CRON-01: Cron job manager -->
       <section class="setting-group cron-manager">
-        <span class="label">Cron Jobs</span>
+        <span class="label">Job Id Based Crons</span>
 
         <div class="cron-form">
           <input

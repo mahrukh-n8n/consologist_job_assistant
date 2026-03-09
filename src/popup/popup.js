@@ -380,7 +380,119 @@ async function deleteCron(cronId) {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('cron-add-btn')?.addEventListener('click', addCron);
   loadCronList();
+  document.getElementById('debug-selectors-btn')?.addEventListener('click', testSelectors);
 });
+
+// ─── Selector Debugger ────────────────────────────────────────────────────────
+function runAllSelectorChecks() {
+  function firstText(selectors) {
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (el && el.textContent.trim()) return el.textContent.trim();
+    }
+    return null;
+  }
+  const results = [];
+
+  // title
+  let title = null;
+  const fc = document.querySelector('.air3-card-section');
+  if (fc) { for (const s of fc.querySelectorAll('span')) { const t = s.textContent.trim(); if (t.length > 10 && t.length < 300 && !t.includes('ago') && !t.includes('Posted') && !t.includes('profile')) { title = t; break; } } }
+  if (!title && document.title) { const p = document.title.split(' - '); if (p.length > 1) p.pop(); title = p.join(' - ').trim() || null; }
+  results.push({ name: 'title', val: title });
+
+  // description
+  let desc = null;
+  for (const s of document.querySelectorAll('.air3-card-section')) { const h = s.querySelector('strong'); if (h && h.textContent.trim() === 'Summary') { desc = s.textContent.replace('Summary', '').trim() || null; break; } }
+  if (!desc) { const el = document.querySelector('[data-test="description"], .job-description'); if (el) desc = el.textContent.trim() || null; }
+  results.push({ name: 'description', val: desc });
+
+  // budget
+  let budget = firstText(['p.m-0 > strong', '[data-test="budget"]', '[data-test="hourly-rate"]', '.budget']);
+  if (!budget) { const m = document.body.innerText.match(/\$[\d,]+(?:\.\d+)?\s*[–\-]\s*\$[\d,]+(?:\.\d+)?\s*\/\s*hr\b/i) || document.body.innerText.match(/\$[\d,]+(?:\.\d+)?\s*\/\s*hr\b/i); if (m) budget = m[0].trim(); }
+  results.push({ name: 'budget', val: budget });
+
+  // skills
+  const skillSels = ['[data-test="skill-badge"]', '.skill-badge', '[data-test="skills"] .badge', '.skills-list .badge'];
+  let skills = [];
+  for (const sel of skillSels) { const els = document.querySelectorAll(sel); if (els.length > 0) { skills = Array.from(els).map(e => e.textContent.trim()).filter(Boolean); break; } }
+  results.push({ name: 'skills', val: skills.length ? skills.join(', ') : null });
+
+  // experience_level
+  let expLvl = null;
+  for (const s of document.querySelectorAll('strong')) { if (['Entry Level', 'Intermediate', 'Expert'].includes(s.textContent.trim())) { expLvl = s.textContent.trim(); break; } }
+  results.push({ name: 'experience_level', val: expLvl });
+
+  // project_duration
+  let dur = document.querySelector('.segmentations')?.textContent.trim() || null;
+  if (!dur) dur = firstText(['[data-test="duration"]', '[data-test="project-duration"]', '.duration']);
+  results.push({ name: 'project_duration', val: dur });
+
+  // posted_date
+  let posted = document.querySelector('[data-test="posted-on"] time, time[datetime]')?.getAttribute('datetime') || null;
+  if (!posted) { const fc2 = document.querySelector('.air3-card-section'); if (fc2) { for (const s of fc2.querySelectorAll('span')) { const t = s.textContent.trim(); if (t.includes('ago') && t.length < 30) { posted = t; break; } } } }
+  results.push({ name: 'posted_date', val: posted });
+
+  // proposals_count
+  let proposals = null;
+  for (const s of document.querySelectorAll('span.value')) { const t = s.textContent.trim(); if (/^(Less than|\d)/.test(t) && !t.includes('ago') && !t.includes('hour') && !t.includes('day')) { proposals = t; break; } }
+  results.push({ name: 'proposals_count', val: proposals });
+
+  // payment_verified
+  let verified = false;
+  for (const s of document.querySelectorAll('strong')) { if (s.textContent.includes('Payment method verified')) { verified = true; break; } }
+  results.push({ name: 'payment_verified', val: verified ? 'true' : null });
+
+  // client_location
+  let loc = null;
+  const cl = document.querySelector('.features.text-light-on-muted.list-unstyled');
+  if (cl) { for (const s of cl.querySelectorAll('strong')) { const t = s.textContent.trim(); if (!t.includes('$') && !t.includes('jobs') && !t.includes('rate') && !t.includes('verified')) { loc = t; break; } } }
+  results.push({ name: 'client_location', val: loc });
+
+  // client_rating
+  let rating = null;
+  for (const s of document.querySelectorAll('span.sr-only')) { if (s.textContent.startsWith('Rating is')) { const m = s.textContent.match(/Rating is (\d+\.?\d*) out of/); if (m) { rating = m[1]; break; } } }
+  results.push({ name: 'client_rating', val: rating });
+
+  // client_total_spent
+  let spent = null;
+  if (cl) { for (const s of cl.querySelectorAll('strong')) { if (s.textContent.includes('total spent')) { spent = s.textContent.trim(); break; } } }
+  results.push({ name: 'client_total_spent', val: spent });
+
+  // hire_rate
+  const hrEl = document.querySelector('[data-qa="client-job-posting-stats"] div');
+  results.push({ name: 'hire_rate', val: hrEl?.textContent.trim() || null });
+
+  return results;
+}
+
+async function testSelectors() {
+  const resultsEl = document.getElementById('debug-results');
+  resultsEl.style.display = 'block';
+  resultsEl.innerHTML = 'Running on active Upwork tab...';
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.url?.includes('upwork.com')) {
+    resultsEl.innerHTML = '<span style="color:#f87171">No active Upwork tab found. Open a job detail page first.</span>';
+    return;
+  }
+
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: runAllSelectorChecks,
+  });
+
+  const rows = (result?.result || []).map(({ name, val }) => {
+    const found = val !== null && val !== undefined && val !== '';
+    return `<div style="display:flex;gap:6px;align-items:baseline;margin-bottom:2px">
+      <span style="color:${found ? '#4ade80' : '#f87171'};font-weight:bold;min-width:12px">${found ? '✓' : '✗'}</span>
+      <span style="color:#ccc;min-width:180px;font-size:11px">${name}</span>
+      <span style="color:#888;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${found ? String(val).slice(0, 60) : 'NOT FOUND'}</span>
+    </div>`;
+  });
+
+  resultsEl.innerHTML = rows.join('');
+}
 
 // ─── Pattern for future action buttons (Phases 2-3 popup additions) ──────────
 // When adding scrape/webhook action buttons, wire responses like this:
