@@ -95,6 +95,24 @@ export function transformJob(raw) {
     return new Date().toISOString();
   }
 
+  /** Convert relative time like "3 weeks ago" to ISO date string. */
+  function relativeToIso(str) {
+    if (!str) return null;
+    if (String(str).includes('T')) return str;
+    const now = new Date();
+    const m = String(str).match(/(\d+)\s*(minute|hour|day|week|month|year)s?\s*ago/i);
+    if (!m) return null;
+    const n = parseInt(m[1], 10);
+    const unit = m[2].toLowerCase();
+    if (unit === 'minute') now.setMinutes(now.getMinutes() - n);
+    else if (unit === 'hour') now.setHours(now.getHours() - n);
+    else if (unit === 'day') now.setDate(now.getDate() - n);
+    else if (unit === 'week') now.setDate(now.getDate() - n * 7);
+    else if (unit === 'month') now.setMonth(now.getMonth() - n);
+    else if (unit === 'year') now.setFullYear(now.getFullYear() - n);
+    return now.toISOString();
+  }
+
   // ── Derive values ────────────────────────────────────────────────────────
 
   const paymentType = mapPaymentType(raw.payment_type || raw.budget);
@@ -104,10 +122,10 @@ export function transformJob(raw) {
   return {
     category: 'N/A',
     subcategory: 'N/A',
-    postedAt: isoOrToday(raw.posted_date),
-    publishTime: null,
-    createTime: null,
-    lastActivity: null,
+    postedAt: raw.publish_time || raw.create_time || isoOrToday(raw.posted_date),
+    publishTime: raw.publish_time || null,
+    createTime: raw.create_time || null,
+    lastActivity: relativeToIso(raw.last_viewed_by_client),
     lastOnlineTime: 'N/A',
     currencyCode: 'N/A',
     hourlyMin: paymentType === 'HOURLY' ? hourlyRange.min : 0,
@@ -121,10 +139,10 @@ export function transformJob(raw) {
     skills: Array.isArray(raw.skills) ? raw.skills : [],
     contractorTier: mapTier(raw.experience_level),
     totalApplicants: parseProposals(raw.proposals_count),
-    totalInvitedToInterview: 0,
-    totalHired: 0,
-    unansweredInvites: 0,
-    invitationsSent: 0,
+    totalInvitedToInterview: raw.interviewing ?? 0,
+    totalHired: raw.total_hired ?? 0,
+    unansweredInvites: raw.unanswered_invites ?? 0,
+    invitationsSent: raw.invites_sent ?? 0,
     numberOfPositionsToHire: 1,
     hireRate: raw.hire_rate ?? 0,
     clientCountry: location.country,
@@ -132,8 +150,8 @@ export function transformJob(raw) {
     feedbackScore: parseRating(raw.client_rating),
     feedbackCount: 0,
     totalCharges: parseMoney(raw.client_total_spent),
-    totalJobsWithHires: 0,
-    openedJobs: 0,
+    totalJobsWithHires: raw.client_total_hires ?? 0,
+    openedJobs: raw.client_active_hires ?? 0,
     isPaymentVerified: Boolean(raw.client_payment_verified),
     clientIndustry: 'N/A',
     clientCompanySize: 0,

@@ -182,16 +182,32 @@ function scrapeDetailPage() {
     ]);
   }
 
-  // posted_date — span containing "ago" inside the first air3-card-section
-  let posted_date = null;
-  const timeEl = document.querySelector('[data-test="posted-on"] time, time[datetime]');
-  if (timeEl) {
-    posted_date = timeEl.getAttribute('datetime') || timeEl.textContent.trim() || null;
+  // create_time / publish_time — ISO dates from Nuxt/Vue script payload
+  let create_time = null;
+  let publish_time = null;
+  const jobScript = Array.from(document.querySelectorAll('script')).find(s => s.textContent.includes(job_id));
+  if (jobScript) {
+    const isoDates = jobScript.textContent.match(/20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z/g) || [];
+    if (isoDates.length >= 2) {
+      create_time = isoDates[0];
+      publish_time = isoDates[1];
+    } else if (isoDates.length === 1) {
+      create_time = isoDates[0];
+    }
+  }
+
+  // posted_date — use publish_time if available, else span containing "ago"
+  let posted_date = publish_time;
+  if (!posted_date) {
+    const timeEl = document.querySelector('[data-test="posted-on"] time, time[datetime]');
+    if (timeEl) {
+      posted_date = timeEl.getAttribute('datetime') || timeEl.textContent.trim() || null;
+    }
   }
   if (!posted_date) {
-    const firstCard = document.querySelector('.air3-card-section');
-    if (firstCard) {
-      for (const span of firstCard.querySelectorAll('span')) {
+    const firstCard2 = document.querySelector('.air3-card-section');
+    if (firstCard2) {
+      for (const span of firstCard2.querySelectorAll('span')) {
         const t = span.textContent.trim();
         if (t.includes('ago') && t.length < 30) { posted_date = t; break; }
       }
@@ -269,12 +285,20 @@ function scrapeDetailPage() {
     ]);
   }
 
-  // client_total_spent — strong containing "total spent" in the client info list
+  // client_total_spent + total_hires_active — li containing "total spent" strong + div with "X hires, Y active"
   let client_total_spent = null;
+  let client_total_hires = 0;
+  let client_active_hires = 0;
   if (clientList) {
-    for (const strong of clientList.querySelectorAll('strong')) {
-      if (strong.textContent.includes('total spent')) {
+    for (const li of clientList.querySelectorAll('li')) {
+      const strong = li.querySelector('strong');
+      if (strong && strong.textContent.includes('total spent')) {
         client_total_spent = strong.textContent.replace('total spent', '').trim();
+        const div = li.querySelector('div');
+        if (div) {
+          const m = div.textContent.match(/(\d+)\s*hires?,\s*(\d+)\s*active/i);
+          if (m) { client_total_hires = parseInt(m[1], 10); client_active_hires = parseInt(m[2], 10); }
+        }
         break;
       }
     }
@@ -295,6 +319,19 @@ function scrapeDetailPage() {
     if (match) hire_rate = parseInt(match[1], 10);
   }
 
+  // Activity on this job — li.ca-item elements with .title and .value spans
+  const activityMap = {};
+  for (const li of document.querySelectorAll('li.ca-item')) {
+    const key = li.querySelector('.title')?.textContent.trim().replace(':', '');
+    const val = li.querySelector('.value')?.textContent.trim();
+    if (key && val) activityMap[key] = val;
+  }
+  const total_hired = parseInt(activityMap['Hires'], 10) || 0;
+  const interviewing = parseInt(activityMap['Interviewing'], 10) || 0;
+  const invites_sent = parseInt(activityMap['Invites sent'], 10) || 0;
+  const unanswered_invites = parseInt(activityMap['Unanswered invites'], 10) || 0;
+  const last_viewed_by_client = activityMap['Last viewed by client'] || null;
+
   const job = {
     job_id,
     title,
@@ -306,15 +343,24 @@ function scrapeDetailPage() {
     experience_level,
     project_duration,
     posted_date,
+    create_time,
+    publish_time,
     proposals_count,
     client_payment_verified,
     client_location,
     client_rating,
     client_total_spent,
+    client_total_hires,
+    client_active_hires,
     hire_rate,
+    total_hired,
+    interviewing,
+    invites_sent,
+    unanswered_invites,
+    last_viewed_by_client,
   };
 
-  console.debug('[upwork-ext] detail scrape:', job_id, '— fields populated:', Object.values(job).filter(v => v !== null && v !== false && !(Array.isArray(v) && v.length === 0)).length, '/ 16');
+  console.debug('[upwork-ext] detail scrape:', job_id, '— fields populated:', Object.values(job).filter(v => v !== null && v !== false && v !== 0 && !(Array.isArray(v) && v.length === 0)).length, '/ 21');
 
   return job;
 }

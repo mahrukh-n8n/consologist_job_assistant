@@ -497,9 +497,17 @@ async function runCronJob(cronId) {
   const { cronJobs = [] } = await chrome.storage.local.get({ cronJobs: [] });
   const cron = cronJobs.find(c => c.id === cronId);
   if (!cron) {
-    console.warn('[SW] runCronJob: cron not found', cronId);
+    console.warn("[SW] runCronJob: cron not found", cronId);
     return;
   }
+  if (cron.enabled === false) {
+    console.debug("[SW] runCronJob: cron disabled, skipping", cronId);
+    return;
+  }
+
+
+
+
   await fireNotification('scrapeComplete', `Cron "${cron.name}" fired — fetching job IDs`);
 
   // POST to cron webhook, expect JSON array of job ID strings
@@ -545,7 +553,7 @@ async function runCronJob(cronId) {
 
   // Respect CF wait setting — same logic as runScheduledScrape
   const { cfWaitSeconds } = await chrome.storage.local.get({ cfWaitSeconds: 5 });
-  const cfWaitMs = Math.max(3, Math.min(cfWaitSeconds, 60)) * 1000;
+  const cfWaitMs = Math.max(3000, (cfWaitSeconds || 5) * 1000);
   const existingUpworkTabs = await chrome.tabs.query({ url: '*://*.upwork.com/*' });
   if (existingUpworkTabs.length === 0) {
     // No active Upwork session — open a tab so CF can solve, then close it

@@ -303,6 +303,33 @@ footer {
   max-width: 220px;
 }
 
+.cron-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cron-toggle-btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid;
+}
+
+.cron-toggle-btn.on {
+  background: var(--accent, #4ade80);
+  border-color: var(--accent, #4ade80);
+  color: #000;
+}
+
+.cron-toggle-btn.off {
+  background: transparent;
+  border-color: var(--muted, #888);
+  color: var(--muted, #888);
+}
+
 .cron-delete-btn {
   flex-shrink: 0;
   padding: 4px 10px;

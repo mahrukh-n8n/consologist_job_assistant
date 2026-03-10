@@ -311,17 +311,24 @@ async function loadCronList() {
     const li = document.createElement('li');
     li.className = 'cron-item';
     li.dataset.cronId = cron.id;
+    const isOn = cron.enabled !== false;
     li.innerHTML = `
       <div class="cron-info">
         <strong class="cron-name">${escapeHtml(cron.name)}</strong>
         <span class="cron-interval">every ${cron.intervalMinutes} min</span>
         <span class="cron-url" title="${escapeHtml(cron.webhookUrl)}">${escapeHtml(truncate(cron.webhookUrl, 40))}</span>
       </div>
-      <button class="cron-delete-btn" data-id="${cron.id}" type="button" aria-label="Delete ${escapeHtml(cron.name)}">Delete</button>
+      <div class="cron-actions">
+        <button class="cron-toggle-btn ${isOn ? 'on' : 'off'}" data-id="${cron.id}" type="button" aria-label="Toggle ${escapeHtml(cron.name)}">${isOn ? 'ON' : 'OFF'}</button>
+        <button class="cron-delete-btn" data-id="${cron.id}" type="button" aria-label="Delete ${escapeHtml(cron.name)}">Delete</button>
+      </div>
     `;
     list.appendChild(li);
   }
-  // Wire delete buttons
+  // Wire toggle + delete buttons
+  list.querySelectorAll('.cron-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => toggleCron(btn.dataset.id));
+  });
   list.querySelectorAll('.cron-delete-btn').forEach(btn => {
     btn.addEventListener('click', () => deleteCron(btn.dataset.id));
   });
@@ -349,6 +356,7 @@ async function addCron() {
     name,
     webhookUrl,
     intervalMinutes,
+    enabled: true,
     createdAt: new Date().toISOString(),
   };
 
@@ -365,6 +373,20 @@ async function addCron() {
   document.getElementById('cron-interval').value = '30';
 
   showCronStatus(`Cron "${name}" saved`);
+  await loadCronList();
+}
+
+async function toggleCron(cronId) {
+  const { cronJobs = [] } = await chrome.storage.local.get({ cronJobs: [] });
+  const cron = cronJobs.find(c => c.id === cronId);
+  if (!cron) return;
+  cron.enabled = cron.enabled === false ? true : false;
+  await chrome.storage.local.set({ cronJobs });
+  if (cron.enabled) {
+    chrome.runtime.sendMessage({ action: 'REGISTER_CRON_ALARM', cron });
+  } else {
+    chrome.runtime.sendMessage({ action: 'DELETE_CRON_ALARM', cronId });
+  }
   await loadCronList();
 }
 
@@ -428,8 +450,15 @@ function runAllSelectorChecks() {
   if (!dur) dur = firstText(['[data-test="duration"]', '[data-test="project-duration"]', '.duration']);
   results.push({ name: 'project_duration', val: dur });
 
+  // create_time / publish_time from script payload
+  const jid = window.location.href.match(/~(\d+)/)?.[1];
+  const jScript = jid && Array.from(document.querySelectorAll('script')).find(s => s.textContent.includes(jid));
+  const isoDates = jScript ? jScript.textContent.match(/20\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z/g) || [] : [];
+  results.push({ name: 'create_time (script)', val: isoDates[0] || null });
+  results.push({ name: 'publish_time (script)', val: isoDates[1] || null });
+
   // posted_date
-  let posted = document.querySelector('[data-test="posted-on"] time, time[datetime]')?.getAttribute('datetime') || null;
+  let posted = isoDates[1] || document.querySelector('[data-test="posted-on"] time, time[datetime]')?.getAttribute('datetime') || null;
   if (!posted) { const fc2 = document.querySelector('.air3-card-section'); if (fc2) { for (const s of fc2.querySelectorAll('span')) { const t = s.textContent.trim(); if (t.includes('ago') && t.length < 30) { posted = t; break; } } } }
   results.push({ name: 'posted_date', val: posted });
 
@@ -459,9 +488,36 @@ function runAllSelectorChecks() {
   if (cl) { for (const s of cl.querySelectorAll('strong')) { if (s.textContent.includes('total spent')) { spent = s.textContent.trim(); break; } } }
   results.push({ name: 'client_total_spent', val: spent });
 
+  // client_total_hires / client_active_hires — div sibling of "total spent" strong
+  let hiresActive = null;
+  if (cl) {
+    for (const li of cl.querySelectorAll('li')) {
+      const s = li.querySelector('strong');
+      if (s && s.textContent.includes('total spent')) {
+        const d = li.querySelector('div');
+        if (d) hiresActive = d.textContent.trim();
+        break;
+      }
+    }
+  }
+  results.push({ name: 'client_hires_active', val: hiresActive });
+
   // hire_rate
   const hrEl = document.querySelector('[data-qa="client-job-posting-stats"] div');
   results.push({ name: 'hire_rate', val: hrEl?.textContent.trim() || null });
+
+  // Activity on this job (li.ca-item)
+  const actMap = {};
+  for (const li of document.querySelectorAll('li.ca-item')) {
+    const k = li.querySelector('.title')?.textContent.trim().replace(':', '');
+    const v = li.querySelector('.value')?.textContent.trim();
+    if (k && v) actMap[k] = v;
+  }
+  results.push({ name: 'total_hired (Hires)', val: actMap['Hires'] || null });
+  results.push({ name: 'interviewing', val: actMap['Interviewing'] || null });
+  results.push({ name: 'invites_sent', val: actMap['Invites sent'] || null });
+  results.push({ name: 'unanswered_invites', val: actMap['Unanswered invites'] || null });
+  results.push({ name: 'last_viewed_by_client', val: actMap['Last viewed by client'] || null });
 
   return results;
 }
