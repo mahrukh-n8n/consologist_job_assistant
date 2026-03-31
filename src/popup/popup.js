@@ -5,10 +5,12 @@
 // ─── Default values ──────────────────────────────────────────────────────────
 const DEFAULTS = {
   webhookUrl: '',
+  proposalWebhookUrl: '',
   scheduleInterval: 30,
   scheduledScrapeEnabled: true,
   searchUrl: '',
   cfWaitSeconds: 5,
+  webhookRetries: 0,
   outputFormat: 'both',
   notifications: {
     master: true,
@@ -22,10 +24,12 @@ const DEFAULTS = {
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const els = {
   webhookUrl:          () => document.getElementById('webhook-url'),
+  proposalWebhookUrl:  () => document.getElementById('proposal-webhook-url'),
   scheduleInterval:          () => document.getElementById('schedule-interval'),
   scheduledScrapeEnabled:    () => document.getElementById('scheduled-scrape-enabled'),
   searchUrl:                 () => document.getElementById('search-url'),
   cfWait:                    () => document.getElementById('cf-wait'),
+  webhookRetries:            () => document.getElementById('webhook-retries'),
   outputFormat:        () => document.querySelector('input[name="outputFormat"]:checked'),
   outputFormatAll:     () => document.querySelectorAll('input[name="outputFormat"]'),
   notifMaster:         () => document.getElementById('notif-master'),
@@ -184,10 +188,12 @@ async function loadSettings() {
     // Merge stored values over defaults (deep merge for notifications object)
     const settings = {
       webhookUrl:             stored.webhookUrl             ?? DEFAULTS.webhookUrl,
+      proposalWebhookUrl:     stored.proposalWebhookUrl     ?? DEFAULTS.proposalWebhookUrl,
       scheduleInterval:       stored.scheduleInterval       ?? DEFAULTS.scheduleInterval,
       scheduledScrapeEnabled: stored.scheduledScrapeEnabled ?? DEFAULTS.scheduledScrapeEnabled,
       searchUrl:              stored.searchUrl              ?? DEFAULTS.searchUrl,
       cfWaitSeconds:          stored.cfWaitSeconds          ?? DEFAULTS.cfWaitSeconds,
+      webhookRetries:         stored.webhookRetries         ?? DEFAULTS.webhookRetries,
       outputFormat:           stored.outputFormat           ?? DEFAULTS.outputFormat,
       notifications: {
         master:          stored['notifications.master']         ?? DEFAULTS.notifications.master,
@@ -200,11 +206,13 @@ async function loadSettings() {
 
     // Apply to DOM
     els.webhookUrl().value = settings.webhookUrl;
+    els.proposalWebhookUrl().value = settings.proposalWebhookUrl;
 
     els.scheduleInterval().value = String(settings.scheduleInterval);
     els.scheduledScrapeEnabled().checked = settings.scheduledScrapeEnabled;
     els.searchUrl().value = settings.searchUrl;
     els.cfWait().value = String(settings.cfWaitSeconds);
+    els.webhookRetries().value = String(settings.webhookRetries);
 
     els.outputFormatAll().forEach(radio => {
       radio.checked = (radio.value === settings.outputFormat);
@@ -232,10 +240,12 @@ async function saveSettings() {
 
     const settings = {
       webhookUrl:                      els.webhookUrl().value.trim(),
+      proposalWebhookUrl:              els.proposalWebhookUrl().value.trim(),
       scheduleInterval:                parseInt(els.scheduleInterval().value, 10),
       scheduledScrapeEnabled:          els.scheduledScrapeEnabled().checked,
       searchUrl:                       els.searchUrl().value.trim(),
       cfWaitSeconds:                   Math.max(3, Math.min(60, parseInt(els.cfWait().value, 10) || 5)),
+      webhookRetries:                  Math.max(0, Math.min(10, parseInt(els.webhookRetries().value, 10) || 0)),
       outputFormat:                    selectedFormat ? selectedFormat.value : DEFAULTS.outputFormat,
       'notifications.master':          els.notifMaster().checked,
       'notifications.scrapeComplete':  els.notifScrapeComplete().checked,
@@ -513,11 +523,22 @@ function runAllSelectorChecks() {
     const v = li.querySelector('.value')?.textContent.trim();
     if (k && v) actMap[k] = v;
   }
-  results.push({ name: 'total_hired (Hires)', val: actMap['Hires'] || null });
+  results.push({ name: 'total_hired (Hires/Hired)', val: actMap['Hires'] || actMap['Hired'] || null });
   results.push({ name: 'interviewing', val: actMap['Interviewing'] || null });
   results.push({ name: 'invites_sent', val: actMap['Invites sent'] || null });
   results.push({ name: 'unanswered_invites', val: actMap['Unanswered invites'] || null });
   results.push({ name: 'last_viewed_by_client', val: actMap['Last viewed by client'] || null });
+
+  // screening_questions
+  let sqText = null;
+  for (const sec of document.querySelectorAll('.air3-card-section')) {
+    if (sec.textContent.includes('You will be asked')) {
+      const ol = sec.querySelector('ol');
+      if (ol) sqText = Array.from(ol.querySelectorAll('li')).map(function(li){return li.textContent.trim()}).filter(Boolean).join(' | ');
+      break;
+    }
+  }
+  results.push({ name: 'screening_questions', val: sqText });
 
   return results;
 }

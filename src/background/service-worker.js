@@ -175,9 +175,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       // Read webhook settings from storage
-      const { webhookUrl, outputFormat } = await chrome.storage.local.get({
+      const { webhookUrl, outputFormat, webhookRetries } = await chrome.storage.local.get({
         webhookUrl: '',
         outputFormat: 'webhook',
+        webhookRetries: 0,
       });
 
       // Guard: skip if outputFormat is csv-only
@@ -203,7 +204,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       let failed = 0;
 
       for (const job of transformedJobs) {
-        const ok = await client.dispatchJob(webhookUrl, job);
+        const ok = await client.dispatchJob(webhookUrl, job, webhookRetries);
         if (ok) {
           sent++;
         } else {
@@ -220,6 +221,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true, sent, failed });
     })();
     return true; // keep channel open for async response
+  }
+
+  // AI Proposal button — same as PUSH_JOBS but uses proposalWebhookUrl
+  if (message.action === 'PUSH_PROPOSAL') {
+    (async () => {
+      if (!message.jobs || !Array.isArray(message.jobs) || message.jobs.length === 0) {
+        sendResponse({ success: false, error: 'no jobs provided' });
+        return;
+      }
+      const { proposalWebhookUrl, webhookRetries } = await chrome.storage.local.get({
+        proposalWebhookUrl: '',
+        webhookRetries: 0,
+      });
+      if (!proposalWebhookUrl) {
+        await fireNotification('errors', 'AI Proposal: no webhook URL configured');
+        sendResponse({ success: false, skipped: true });
+        return;
+      }
+      const transformedJobs = message.jobs.map(transformJob).filter(Boolean);
+      const client = new WebhookClient();
+      let sent = 0; let failed = 0;
+      for (const job of transformedJobs) {
+        const ok = await client.dispatchJob(proposalWebhookUrl, job, webhookRetries);
+        if (ok) sent++; else failed++;
+      }
+      if (sent > 0) {
+        await fireNotification('webhookSent', `AI Proposal: sent ${sent} job${sent === 1 ? '' : 's'}${failed > 0 ? `, ${failed} failed` : ''}`);
+      } else {
+        await fireNotification('errors', `AI Proposal: all ${failed} failed to send`);
+      }
+      sendResponse({ success: sent > 0, sent, failed });
+    })();
+    return true;
   }
 
   // Fetch match statuses for a list of job IDs from n8n match endpoint
@@ -394,6 +428,8 @@ function randomDelay(min, max) {
 }
 
 async function scrapeJobDetails(searchJobs) {
+  const { cfWaitSeconds } = await chrome.storage.local.get({ cfWaitSeconds: 5 });
+  const cfWaitMs = Math.max(3000, (cfWaitSeconds || 5) * 1000);
   const detailedJobs = [];
   for (let i = 0; i < searchJobs.length; i++) {
     const job = searchJobs[i];
@@ -402,6 +438,7 @@ async function scrapeJobDetails(searchJobs) {
     try {
       detailTab = await chrome.tabs.create({ url: job.url, active: false });
       await waitForTabLoad(detailTab.id);
+      await new Promise(r => setTimeout(r, cfWaitMs));
       const res = await chrome.tabs.sendMessage(detailTab.id, { action: 'scrapeDetail' });
       const detailJob = res?.job;
       detailedJobs.push((!detailJob || !detailJob.job_id) ? job : detailJob);
@@ -418,15 +455,16 @@ async function scrapeJobDetails(searchJobs) {
 }
 
 async function dispatchJobsBatch(jobs) {
-  const { webhookUrl, outputFormat } = await chrome.storage.local.get({
+  const { webhookUrl, outputFormat, webhookRetries } = await chrome.storage.local.get({
     webhookUrl: '',
     outputFormat: 'both',
+    webhookRetries: 0,
   });
   if (outputFormat === 'csv' || !webhookUrl) return;
   const transformed = jobs.map(transformJob).filter(Boolean);
   if (transformed.length === 0) return;
   const client = new WebhookClient();
-  const ok = await client.dispatchBatch(webhookUrl, transformed);
+  const ok = await client.dispatchBatch(webhookUrl, transformed, webhookRetries);
   await fireNotification('webhookSent', `Webhook: ${ok ? 'sent' : 'failed'} ${transformed.length} jobs`);
   console.debug('[SW] dispatchJobsBatch:', ok ? 'success' : 'FAILED', transformed.length, 'jobs');
 }
@@ -554,6 +592,7 @@ async function runCronJob(cronId) {
   // Respect CF wait setting — same logic as runScheduledScrape
   const { cfWaitSeconds } = await chrome.storage.local.get({ cfWaitSeconds: 5 });
   const cfWaitMs = Math.max(3000, (cfWaitSeconds || 5) * 1000);
+  console.debug('[SW] runCronJob: CF wait', cfWaitMs / 1000, 's (setting:', cfWaitSeconds, ')');
   const existingUpworkTabs = await chrome.tabs.query({ url: '*://*.upwork.com/*' });
   if (existingUpworkTabs.length === 0) {
     // No active Upwork session — open a tab so CF can solve, then close it
@@ -561,8 +600,6 @@ async function runCronJob(cronId) {
     await waitForTabLoad(warmTab.id);
     await new Promise(r => setTimeout(r, cfWaitMs));
     try { await chrome.tabs.remove(warmTab.id); } catch (_) {}
-  } else {
-    await new Promise(r => setTimeout(r, cfWaitMs));
   }
 
   // Build job stubs for scrapeJobDetails (needs {url} at minimum; job_id is bonus)

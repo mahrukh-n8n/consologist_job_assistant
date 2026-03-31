@@ -326,11 +326,23 @@ function scrapeDetailPage() {
     const val = li.querySelector('.value')?.textContent.trim();
     if (key && val) activityMap[key] = val;
   }
-  const total_hired = parseInt(activityMap['Hires'], 10) || 0;
+  const total_hired = parseInt(activityMap['Hires'] || activityMap['Hired'], 10) || 0;
   const interviewing = parseInt(activityMap['Interviewing'], 10) || 0;
   const invites_sent = parseInt(activityMap['Invites sent'], 10) || 0;
   const unanswered_invites = parseInt(activityMap['Unanswered invites'], 10) || 0;
   const last_viewed_by_client = activityMap['Last viewed by client'] || null;
+
+  // screening_questions — ol inside section containing "You will be asked"
+  let screening_questions = [];
+  for (const section of document.querySelectorAll('.air3-card-section')) {
+    if (section.textContent.includes('You will be asked')) {
+      const ol = section.querySelector('ol');
+      if (ol) {
+        screening_questions = Array.from(ol.querySelectorAll('li')).map(li => li.textContent.trim()).filter(Boolean);
+      }
+      break;
+    }
+  }
 
   const job = {
     job_id,
@@ -358,9 +370,10 @@ function scrapeDetailPage() {
     invites_sent,
     unanswered_invites,
     last_viewed_by_client,
+    screening_questions,
   };
 
-  console.debug('[upwork-ext] detail scrape:', job_id, '— fields populated:', Object.values(job).filter(v => v !== null && v !== false && v !== 0 && !(Array.isArray(v) && v.length === 0)).length, '/ 21');
+  console.debug('[upwork-ext] detail scrape:', job_id, '— fields populated:', Object.values(job).filter(v => v !== null && v !== false && v !== 0 && !(Array.isArray(v) && v.length === 0)).length, '/ 22');
 
   return job;
 }
@@ -536,8 +549,8 @@ function initDetailPage() {
   const urlMatch = location.pathname.match(/\/jobs\/[^/?]*~([a-z0-9]+)/i);
   if (!urlMatch) return;
 
-  // Prevent duplicate injection on SPA re-runs
-  if (document.getElementById('upwork-ext-scrape-btn')) return;
+  // Prevent duplicate injection on SPA re-runs — only skip if BOTH buttons exist
+  if (document.getElementById('upwork-ext-scrape-btn') && document.getElementById('upwork-ext-proposal-btn')) return;
 
   ensureSpinnerStyle();
 
@@ -590,6 +603,54 @@ function initDetailPage() {
     });
   });
 
+  // ── AI Proposal button ──────────────────────────────────────────────────────
+  const proposalBtn = document.createElement('button');
+  proposalBtn.id = 'upwork-ext-proposal-btn';
+  proposalBtn.style.cssText = 'background:#0077cc;color:white;padding:4px 12px;border:none;border-radius:4px;cursor:pointer;font-size:13px;margin-left:8px;display:inline-flex;align-items:center;vertical-align:middle;';
+
+  const proposalSpinner = document.createElement('span');
+  proposalSpinner.className = 'upwork-ext-spinner';
+  proposalSpinner.style.display = 'none';
+
+  const proposalLabel = document.createElement('span');
+  proposalLabel.textContent = 'AI Proposal';
+
+  proposalBtn.appendChild(proposalSpinner);
+  proposalBtn.appendChild(proposalLabel);
+
+  function setProposalLoading(on) {
+    proposalBtn.disabled = on;
+    proposalBtn.style.opacity = on ? '0.75' : '1';
+    proposalBtn.style.cursor = on ? 'not-allowed' : 'pointer';
+    proposalSpinner.style.display = on ? 'inline-block' : 'none';
+    if (on) proposalLabel.textContent = 'Sending…';
+  }
+
+  function resetProposal(text) {
+    proposalLabel.textContent = text;
+    setTimeout(() => {
+      proposalLabel.textContent = 'AI Proposal';
+      setProposalLoading(false);
+    }, 2000);
+  }
+
+  proposalBtn.addEventListener('click', () => {
+    setProposalLoading(true);
+    const jobData = scrapeDetailPage();
+    if (!jobData) {
+      resetProposal('Failed');
+      return;
+    }
+    chrome.runtime.sendMessage({ action: 'PUSH_PROPOSAL', jobs: [jobData] }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.warn('[upwork-ext] PUSH_PROPOSAL error:', chrome.runtime.lastError.message);
+        resetProposal('Failed');
+        return;
+      }
+      resetProposal(response?.success ? 'Sent!' : 'Failed');
+    });
+  });
+
   let attempt = 0;
   const MAX_ATTEMPTS = 10;
   const RETRY_MS = 500;
@@ -625,14 +686,16 @@ function initDetailPage() {
         setTimeout(tryInject, RETRY_MS);
       } else {
         // Last resort: float at top of body
+        document.body.prepend(proposalBtn);
         document.body.prepend(btn);
         console.warn('[upwork-ext] initDetailPage: no anchor found after', MAX_ATTEMPTS, 'attempts — prepended to body');
       }
       return;
     }
 
+    anchor.insertAdjacentElement('afterend', proposalBtn);
     anchor.insertAdjacentElement('afterend', btn);
-    console.debug('[upwork-ext] initDetailPage: button injected after', anchor.tagName || anchor.dataset?.test, 'for job', urlMatch[1]);
+    console.debug('[upwork-ext] initDetailPage: buttons injected after', anchor.tagName || anchor.dataset?.test, 'for job', urlMatch[1]);
   }
 
   tryInject();

@@ -27,6 +27,20 @@
         <p class="hint">n8n webhook endpoint that receives job data.</p>
       </section>
 
+      <!-- SETT-01b: AI Proposal Webhook URL -->
+      <section class="setting-group">
+        <label for="proposal-webhook-url">AI Proposal Webhook URL</label>
+        <input
+          type="url"
+          id="proposal-webhook-url"
+          name="proposalWebhookUrl"
+          placeholder="https://your-n8n-instance.com/webhook/proposal..."
+          autocomplete="off"
+          spellcheck="false"
+        >
+        <p class="hint">Webhook for the AI Proposal button on job detail pages.</p>
+      </section>
+
       <!-- SETT-02: Schedule interval -->
       <section class="setting-group">
         <label for="schedule-interval">Check Interval</label>
@@ -75,6 +89,20 @@
           value="5"
         >
         <p class="hint">Extra wait after the page loads before scraping. Increase (e.g. 15–30) if Cloudflare blocks scheduled scrapes.</p>
+      </section>
+
+      <!-- SETT-08: Webhook retries -->
+      <section class="setting-group">
+        <label for="webhook-retries">Webhook retries</label>
+        <input
+          type="number"
+          id="webhook-retries"
+          name="webhookRetries"
+          min="0"
+          max="10"
+          value="0"
+        >
+        <p class="hint">Number of retry attempts on webhook failure. 0 = no retries (single attempt).</p>
       </section>
 
       <!-- SETT-03: Output format -->

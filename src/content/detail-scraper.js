@@ -276,11 +276,23 @@ export function scrapeDetailPage() {
     const val = li.querySelector('.value')?.textContent.trim();
     if (key && val) activityMap[key] = val;
   }
-  const total_hired = parseInt(activityMap['Hires'], 10) || 0;
+  const total_hired = parseInt(activityMap['Hires'] || activityMap['Hired'], 10) || 0;
   const interviewing = parseInt(activityMap['Interviewing'], 10) || 0;
   const invites_sent = parseInt(activityMap['Invites sent'], 10) || 0;
   const unanswered_invites = parseInt(activityMap['Unanswered invites'], 10) || 0;
   const last_viewed_by_client = activityMap['Last viewed by client'] || null;
+
+  // screening_questions — ol inside section containing "You will be asked"
+  let screening_questions = [];
+  for (const section of document.querySelectorAll('.air3-card-section')) {
+    if (section.textContent.includes('You will be asked')) {
+      const ol = section.querySelector('ol');
+      if (ol) {
+        screening_questions = Array.from(ol.querySelectorAll('li')).map(li => li.textContent.trim()).filter(Boolean);
+      }
+      break;
+    }
+  }
 
   const job = {
     job_id,
@@ -308,6 +320,7 @@ export function scrapeDetailPage() {
     invites_sent,
     unanswered_invites,
     last_viewed_by_client,
+    screening_questions,
   };
 
   console.debug('[upwork-ext] detail scrape:', job_id, '— fields populated:', Object.values(job).filter(v => v !== null && v !== false && !(Array.isArray(v) && v.length === 0)).length, '/ 15');

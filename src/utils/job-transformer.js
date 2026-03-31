@@ -160,6 +160,7 @@ export function transformJob(raw) {
     qualifications_country: null,
     minJobSuccessScore: 0,
     englishLevel: 'N/A',
+    screeningQuestions: Array.isArray(raw.screening_questions) ? raw.screening_questions : [],
     Title: raw.title || 'N/A',
     URL: raw.url || 'N/A',
     Description: raw.description || 'N/A',
